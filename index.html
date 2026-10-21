@@ -1,741 +1,184 @@
-<!DOCTYPE html>
-<html lang="ru" class="dark">
+<!doctype html>
+<html lang="ru">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Starvell Price & Signals Center</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        dark: {
-                            950: '#06080e',
-                            900: '#0b101d',
-                            800: '#111827',
-                            700: '#1f293d',
-                            600: '#2d3b55'
-                        },
-                        brand: {
-                            DEFAULT: '#6366f1',
-                            hover: '#4f46e5',
-                            light: '#818cf8',
-                            dark: '#4338ca'
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Inter', sans-serif; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #0b101d; }
-        ::-webkit-scrollbar-thumb { background: #1f293d; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #2d3b55; }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PRICE WATCH · Справочник цен</title>
+<style>
+:root{--bg:#080d18;--panel:#101827;--panel2:#141f31;--line:#26344a;--text:#edf3fc;--muted:#91a1b8;--blue:#579dff;--yellow:#f5c85b;--green:#54d6a0;--red:#ff8585}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(135deg,#080d18 0%,#0b1322 55%,#0d1727 100%);color:var(--text);font:14px/1.5 Inter,sans-serif;min-height:100vh}
+.app{display:grid;grid-template-columns:245px minmax(0,1fr);min-height:100vh}
+.sidebar{position:sticky;top:0;height:100vh;background:#0b1220;border-right:1px solid #1d2a3d;padding:25px 16px;display:flex;flex-direction:column;gap:24px}
+.brand{display:flex;align-items:center;gap:12px;padding:0 8px 22px;border-bottom:1px solid #202c40}
+.brand-mark{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,#4a9cff,#6b70ff);display:grid;place-items:center;color:white;font-weight:900}
+.brand-title{font-weight:800;font-size:15px}
+.brand-sub{color:var(--muted);font-size:11px}
+.nav-label{font-size:10px;font-weight:800;letter-spacing:.14em;color:#71839d;text-transform:uppercase;padding:0 12px;margin-bottom:8px}
+.tabs{display:flex;flex-direction:column;gap:6px}
+.tab{width:100%;display:flex;align-items:center;gap:11px;text-align:left;border:1px solid transparent;color:#aebbd0;background:transparent;border-radius:10px;padding:11px 12px;cursor:pointer;font:inherit;font-weight:600}
+.tab:hover{background:#121e30;color:white}
+.tab.active{background:linear-gradient(90deg,#1b3e68,#172b45);border-color:#2d5d91;color:#fff}
+.user-panel{margin-top:auto;padding:14px;border:1px solid #26354b;background:#101a2a;border-radius:12px;display:flex;flex-direction:column;gap:10px}
+.user-info{font-size:12px;color:#aab9ce}
+.user-info strong{display:block;color:#eaf2fc}
+.btn{padding:8px 12px;border-radius:8px;border:1px solid #2d5d91;background:#172b45;color:#fff;cursor:pointer;font-weight:600;font-size:12px;text-align:center;text-decoration:none;display:inline-block}
+.btn:hover{background:#1f395c}
+.btn-red{background:#522;border-color:#833;color:#faa}
+.btn-red:hover{background:#622}
+.main{padding:30px clamp(18px,3vw,42px);max-width:1800px;width:100%;margin:0 auto}
+.topline{display:flex;justify-content:space-between;align-items:center;margin-bottom:23px}
+.hero h1{font-size:clamp(27px,3vw,38px);margin:8px 0 9px}
+.hero p{color:var(--muted);margin:0;font-size:13px}
+.controls{padding:13px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:13px;background:#101827;border:1px solid #26344a;border-radius:13px}
+.controls input,.controls select{background:#0b1321;color:var(--text);border:1px solid #2a3a51;border-radius:9px;padding:11px 12px;font:inherit;font-size:12px;outline:none}
+.controls input{flex:1;min-width:240px}
+.tablebox{overflow:hidden;background:#0f1827;border:1px solid #26344a;border-radius:14px}
+.table-scroll{overflow:auto;max-height:66vh}
+table{width:100%;border-collapse:collapse;min-width:1200px}
+th{position:sticky;top:0;background:#18263a;color:#a9bdd7;text-align:left;font-size:10px;text-transform:uppercase;padding:14px;z-index:2}
+td{padding:14px;border-bottom:1px solid #202d41;font-size:12px;color:#c4d0e0}
+tbody tr:hover{background:#192a40}
+.tag{padding:4px 9px;border-radius:6px;background:#1a2f49;border:1px solid #2a4565;color:#9dceff;font-size:10px;font-weight:750}
+.price{font-weight:650;color:#e3ecf9}
+.threshold{color:var(--yellow);font-weight:800}
+</style>
 </head>
-<body class="bg-dark-950 text-slate-100 min-h-screen selection:bg-brand selection:text-white">
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">S</div>
+      <div>
+        <div class="brand-title">PRICE WATCH</div>
+        <div class="brand-sub">Внутренний справочник</div>
+      </div>
+    </div>
+    <div>
+      <div class="nav-label">Категории</div>
+      <div class="tabs" id="tabs"></div>
+    </div>
+    <div class="user-panel" id="userPanel"></div>
+  </aside>
 
-    <!-- Root Application Container -->
-    <div id="app" class="min-h-screen flex flex-col">
-        <!-- Dynamic views rendered via JavaScript -->
+  <main class="main">
+    <div class="topline">
+      <div class="hero">
+        <div style="color:#77b7ff;font-size:10px;font-weight:800;text-transform:uppercase">Защищенная система мониторинга</div>
+        <h1>Справочник цен и сигналов</h1>
+        <p>Актуальные диапазоны цен, пороги проверки и маркеры подозрительных лотов.</p>
+      </div>
     </div>
 
-    <!-- Notification / Custom Modal Container -->
-    <div id="modal-root"></div>
+    <section class="controls">
+      <input id="search" placeholder="Поиск по предмету, игре или сигналу…">
+      <select id="sort">
+        <option value="default">Сортировка: по умолчанию</option>
+        <option value="low">Сначала дешевле</option>
+        <option value="high">Сначала дороже</option>
+      </select>
+    </section>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    <section class="tablebox">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Товар / позиция</th>
+              <th>Игра / сервис</th>
+              <th>Редкость / тип</th>
+              <th>Цена от</th>
+              <th>Цена до</th>
+              <th>Порог проверки</th>
+              <th>Сигнал</th>
+              <th>Источник</th>
+            </tr>
+          </thead>
+          <tbody id="body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
 
-        // Firebase Configuration & Initialization
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'starvell-price-prod-v1';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-            apiKey: "AIzaSyDummyKeyForFallbackModeOnly12345",
-            authDomain: "starvell-price.firebaseapp.com",
-            projectId: "starvell-price",
-            storageBucket: "starvell-price.appspot.com",
-            messagingSenderId: "123456789",
-            appId: "1:123456789:web:abcdef"
-        };
+<script>
+// Начальная база товаров, если еще ничего не создано
+const defaultData = [
+  {"item": "40 Robux", "game": "Roblox", "rarity": "Игровая валюта", "from": 64.65, "to": 106.49, "threshold": 38.79, "signal": "Цена ≤ 38.79 ₽ — проверить на мошенничество", "source": "https://starvell.com/roblox/packages", "group": "Roblox"},
+  {"item": "Гингерскоп (Gingerscope)", "game": "MM2", "rarity": "Ancient", "from": 40000, "to": 42999, "threshold": 24000, "signal": "Низкая цена — проверить продавца", "source": "https://paparoblo.ru", "group": "MM2"}
+];
 
-        let app, db, auth, currentUser = null;
-        let isFirebaseActive = false;
+if(!localStorage.getItem('sp_items')) {
+  localStorage.setItem('sp_items', JSON.stringify(defaultData));
+}
+if(!localStorage.getItem('sp_users')) {
+  // Создаем админа по умолчанию: логин admin, пароль admin, ключ ADMIN-MASTER-KEY
+  localStorage.setItem('sp_users', JSON.stringify([
+    {username: 'admin', pass: 'admin', role: 'admin', key: 'ADMIN-MASTER-KEY'}
+  ]));
+}
 
-        try {
-            app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-            isFirebaseActive = true;
-        } catch (e) {
-            console.warn("Firebase initialization skipped or running in offline mode:", e);
-        }
+const currentUser = JSON.parse(localStorage.getItem('sp_current_user') || 'null');
 
-        // Initial Seed Items for Starvell Catalog
-        const DEFAULT_ITEMS = [
-            { id: '1', item: "Корблокс (Korblox Deathspeaker)", game: "Roblox", rarity: "Лимитированный бандл", from: 7000, to: "Нет подтверждённых данных", threshold: 4200, signal: "Цена ≤ 4,200 ₽ (≈60%) — проверить комплектность и метод передачи; риск восстановления.", source: "Ориентир от пользователя. Официальная цена в Roblox: 17 000 Robux", group: "Roblox" },
-            { id: '2', item: "40 Robux", game: "Roblox", rarity: "Игровая валюта", from: 64.65, to: 106.49, threshold: 38.79, signal: "Цена ≤ 38.79 ₽ — проверить продавца, новый профиль или давление на сделку.", source: "STARVELL: https://starvell.com/roblox/packages", group: "Roblox" },
-            { id: '3', item: "80 Robux", game: "Roblox", rarity: "Игровая валюта", from: 85.33, to: 141.78, threshold: 51.20, signal: "Цена ≤ 51.20 ₽ — проверить продавца.", source: "STARVELL: https://starvell.com/roblox/packages", group: "Roblox" },
-            { id: '4', item: "Гингерскоп (Gingerscope)", game: "MM2", rarity: "Ancient", from: 40000, to: 42999, threshold: 24000, signal: "Цена ≤ 24,000 ₽ — проверить наличие и гарантии продавца.", source: "Beee.PRO / Papa Roblo", group: "MM2" },
-            { id: '5', item: "Evergun", game: "MM2", rarity: "Godly", from: 3450, to: 3850, threshold: 2070, signal: "Цена ≤ 2,070 ₽ — проверить актуальность листинга.", source: "gemx.store / paparoblo.ru", group: "MM2" },
-            { id: '6', item: "AWP | Dragon Lore", game: "Counter-Strike 2", rarity: "Редкий скин", from: 50000, to: 2500000, threshold: 30000, signal: "Проверить износ (Float), наклейки, паттерн и историю инвентаря.", source: "SteamDB / Market", group: "Другие игры" },
-            { id: '7', item: "M4A4 | Howl", game: "Counter-Strike 2", rarity: "Contraband", from: 100000, to: 1500000, threshold: 60000, signal: "Проверить Float и наличие банов обмена.", source: "SteamDB", group: "Другие игры" },
-            { id: '8', item: "Аккаунт Majestic RP — базовый", game: "Majestic RP", rarity: "Игровой аккаунт", from: 114.24, to: 1371, threshold: 68.54, signal: "Проверить почту, привязки Social Club и риск возврата.", source: "STARVELL Accounts", group: "Другие игры" }
-        ];
+// Рендерим панель пользователя в сайдбаре
+const userPanel = document.getElementById('userPanel');
+if(currentUser) {
+  userPanel.innerHTML = `
+    <div class="user-info">Вы вошли как: <strong>${currentUser.username}</strong> (${currentUser.role === 'admin' ? '👑 Администратор' : '🛡 Сотрудник'})</div>
+    ${currentUser.role === 'admin' ? '<a href="admin.html" class="btn">⚙️ Панель админа</a>' : ''}
+    <button class="btn btn-red" onclick="logout()">Выйти</button>
+  `;
+} else {
+  userPanel.innerHTML = `
+    <div class="user-info">Вы не авторизованы</div>
+    <a href="auth.html" class="btn">🔑 Войти / Регистрация</a>
+  `;
+}
 
-        // Application State Management
-        let state = {
-            view: 'login', // login, register, catalog, admin
-            user: null, // { uid, username, role: 'admin'|'employee', employeeKey }
-            usersList: [],
-            keysList: [],
-            itemsList: [...DEFAULT_ITEMS],
-            filterGroup: 'Все игры',
-            searchQuery: '',
-            sortBy: 'default',
-            limitCount: 'all',
-            modalMessage: null
-        };
+function logout() {
+  localStorage.removeItem('sp_current_user');
+  location.reload();
+}
 
-        // Local Storage Fallback & Cloud Sync Helpers
-        const STORAGE_KEY_STATE = 'starvell_app_state_v2';
-        
-        function loadLocalState() {
-            try {
-                const saved = localStorage.getItem(STORAGE_KEY_STATE);
-                if (saved) {
-                    const parsed = JSON.parse(saved);
-                    if (parsed.itemsList && parsed.itemsList.length > 0) state.itemsList = parsed.itemsList;
-                    if (parsed.usersList) state.usersList = parsed.usersList;
-                    if (parsed.keysList) state.keysList = parsed.keysList;
-                    if (parsed.user) state.user = parsed.user;
-                }
-            } catch (e) {
-                console.error("Error loading local state:", e);
-            }
-            // Ensure default admin exists
-            if (!state.usersList.some(u => u.username === 'admin')) {
-                state.usersList.push({ uid: 'admin_root', username: 'admin', role: 'admin', employeeKey: 'ADMIN-ROOT-KEY', createdAt: Date.now() });
-            }
-            if (!state.keysList.some(k => k.key === 'EMP-MASTER-KEY')) {
-                state.keysList.push({ key: 'EMP-MASTER-KEY', assignedTo: 'Мастер ключ сотрудника', role: 'employee', active: true, createdAt: Date.now() });
-            }
-        }
+const groups = ['Все игры', 'Roblox', 'MM2', 'Rust', 'Другие игры'];
+let activeGroup = 'Все игры';
+const tabs = document.getElementById('tabs');
 
-        function saveLocalState() {
-            try {
-                localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify({
-                    itemsList: state.itemsList,
-                    usersList: state.usersList,
-                    keysList: state.keysList,
-                    user: state.user
-                }));
-            } catch (e) {
-                console.error("Error saving local state:", e);
-            }
-        }
+groups.forEach(g => {
+  let b = document.createElement('button');
+  b.className = 'tab' + (g === activeGroup ? ' active' : '');
+  b.textContent = g;
+  b.onclick = () => { activeGroup = g; document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.textContent===g)); render(); };
+  tabs.appendChild(b);
+});
 
-        // Custom Modal Alert
-        window.showAlert = function(title, text) {
-            state.modalMessage = { title, text };
-            render();
-        }
+function render() {
+  const items = JSON.parse(localStorage.getItem('sp_items') || '[]');
+  const q = document.getElementById('search').value.toLowerCase();
+  const sort = document.getElementById('sort').value;
 
-        window.closeModal = function() {
-            state.modalMessage = null;
-            render();
-        }
+  let filtered = items.filter(x => (activeGroup === 'Все игры' || x.group === activeGroup) && (!q || JSON.stringify(x).toLowerCase().includes(q)));
+  
+  if(sort === 'low') filtered.sort((a,b)=>a.from - b.from);
+  if(sort === 'high') filtered.sort((a,b)=>b.from - a.from);
 
-        // Authentication & Key Logic
-        window.handleLogin = function(e) {
-            e.preventDefault();
-            const username = document.getElementById('login-username').value.trim();
-            const passOrKey = document.getElementById('login-pass').value.trim();
+  document.getElementById('body').innerHTML = filtered.map(x=>`
+    <tr>
+      <td><b>${x.item}</b></td>
+      <td><span class="tag">${x.game}</span></td>
+      <td>${x.rarity}</td>
+      <td class="price">${x.from} ₽</td>
+      <td class="price">${x.to} ₽</td>
+      <td class="threshold">${x.threshold} ₽</td>
+      <td>${x.signal}</td>
+      <td><a href="${x.source}" target="_blank" style="color:#77b7ff">Ссылка</a></td>
+    </tr>
+  `).join('');
+}
 
-            const foundUser = state.usersList.find(u => u.username === username);
-            if (foundUser) {
-                // If user exists, check key or password
-                if (foundUser.employeeKey === passOrKey || passOrKey === 'admin123' || foundUser.role === 'admin') {
-                    state.user = foundUser;
-                    state.view = foundUser.role === 'admin' ? 'catalog' : 'catalog';
-                    saveLocalState();
-                    render();
-                    return;
-                }
-            }
-
-            // Check if login is via a valid Employee Key directly
-            const validKey = state.keysList.find(k => k.key === passOrKey && k.active);
-            if (validKey || passOrKey === 'ADMIN-ROOT-KEY') {
-                const newUser = {
-                    uid: 'usr_' + Math.random().toString(36).substring(2, 9),
-                    username: username || 'Сотрудник_' + Math.floor(Math.random()*1000),
-                    role: passOrKey === 'ADMIN-ROOT-KEY' ? 'admin' : validKey.role,
-                    employeeKey: passOrKey,
-                    createdAt: Date.now()
-                };
-                state.usersList.push(newUser);
-                state.user = newUser;
-                state.view = 'catalog';
-                saveLocalState();
-                render();
-                return;
-            }
-
-            showAlert("Ошибка входа", "Неверное имя пользователя, ключ сотрудника или пароль.");
-        };
-
-        window.handleRegister = function(e) {
-            e.preventDefault();
-            const username = document.getElementById('reg-username').value.trim();
-            const key = document.getElementById('reg-key').value.trim();
-
-            if (!username || !key) {
-                showAlert("Ошибка", "Заполните все поля регистрации.");
-                return;
-            }
-
-            if (state.usersList.some(u => u.username === username)) {
-                showAlert("Ошибка", "Пользователь с таким именем уже существует.");
-                return;
-            }
-
-            const validKey = state.keysList.find(k => k.key === key && k.active);
-            if (!validKey && key !== 'ADMIN-ROOT-KEY') {
-                showAlert("Ошибка", "Указанный ключ сотрудника недействителен или заблокирован.");
-                return;
-            }
-
-            const newUser = {
-                uid: 'usr_' + Math.random().toString(36).substring(2, 9),
-                username: username,
-                role: key === 'ADMIN-ROOT-KEY' ? 'admin' : (validKey ? validKey.role : 'employee'),
-                employeeKey: key,
-                createdAt: Date.now()
-            };
-
-            state.usersList.push(newUser);
-            state.user = newUser;
-            state.view = 'catalog';
-            saveLocalState();
-            render();
-            showAlert("Успешно!", "Аккаунт успешно создан. Добро пожаловать в систему Starvell Price.");
-        };
-
-        window.logout = function() {
-            state.user = null;
-            state.view = 'login';
-            saveLocalState();
-            render();
-        };
-
-        // Admin Management Actions
-        window.generateKey = function() {
-            const newKeyStr = 'STARVELL-' + Math.random().toString(36).substring(2, 6).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
-            state.keysList.push({
-                key: newKeyStr,
-                assignedTo: 'Новый сотрудник',
-                role: 'employee',
-                active: true,
-                createdAt: Date.now()
-            });
-            saveLocalState();
-            render();
-        };
-
-        window.toggleKeyStatus = function(keyStr) {
-            const k = state.keysList.find(item => item.key === keyStr);
-            if (k) {
-                k.active = !k.active;
-                saveLocalState();
-                render();
-            }
-        };
-
-        window.deleteKey = function(keyStr) {
-            state.keysList = state.keysList.filter(item => item.key !== keyStr);
-            saveLocalState();
-            render();
-        };
-
-        window.deleteUser = function(uid) {
-            if (uid === 'admin_root') {
-                showAlert("Запрещено", "Нельзя удалить главного администратора.");
-                return;
-            }
-            state.usersList = state.usersList.filter(u => u.uid !== uid);
-            saveLocalState();
-            render();
-        };
-
-        // Catalog CRUD Actions
-        window.saveItemModal = function(itemId = null) {
-            const item = itemId ? state.itemsList.find(i => i.id === itemId) : null;
-            const title = item ? 'Редактировать позицию справочника' : 'Добавить новую позицию';
-            
-            const modalHTML = `
-                <div class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
-                    <div class="bg-dark-900 border border-dark-700 rounded-2xl w-full max-w-xl p-6 shadow-2xl">
-                        <div class="flex justify-between items-center mb-5 pb-3 border-b border-dark-700">
-                            <h3 class="text-lg font-bold text-white">${title}</h3>
-                            <button onclick="closeModalCustom()" class="text-slate-400 hover:text-white text-xl font-bold">&times;</button>
-                        </div>
-                        <form id="item-form" onsubmit="submitItemForm(event, '${itemId || ''}')" class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Название предмета / позиции</label>
-                                <input type="text" id="f-item" required value="${item ? item.item : ''}" class="w-full bg-dark-950 border border-dark-700 rounded-xl px-4 py-2.5 text-sm text-white focus:border-brand outline-none">
-                            </div>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Игра / Сервис</label>
-                                    <input type="text" id="f-game" required value="${item ? item.game : 'Roblox'}" class="w-full bg-dark-950 border border-dark-700 rounded-xl px-4 py-2.5 text-sm text-white focus:border-brand outline-none">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Категория (Группа)</label>
-                                    <select id="f-group" class="w-full bg-dark-950 border border-dark-700 rounded-xl px-4 py-2.5 text-sm text-white focus:border-brand outline-none">
-                                        <option value="Roblox" ${item && item.group === 'Roblox' ? 'selected' : ''}>Roblox</option>
-                                        <option value="MM2" ${item && item.group === 'MM2' ? 'selected' : ''}>MM2</option>
-                                        <option value="Rust" ${item && item.group === 'Rust' ? 'selected' : ''}>Rust</option>
-                                        <option value="Другие игры" ${item && item.group === 'Другие игры' ? 'selected' : ''}>Другие игры</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-3 gap-3">
-                                <div>
-                                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Редкость / Тип</label>
-                                    <input type="text" id="f-rarity" value="${item ? item.rarity : ''}" class="w-full bg-dark-950 border border-dark-700 rounded-xl px-3 py-2.5 text-sm text-white focus:border-brand outline-none">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Цена от (₽)</label>
-                                    <input type="number" step="0.01" id="f-from" required value="${item ? item.from : ''}" class="w-full bg-dark-950 border border-dark-700 rounded-xl px-3 py-2.5 text-sm text-white focus:border-brand outline-none">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Цена до (₽)</label>
-                                    <input type="text" id="f-to" value="${item ? item.to : ''}" class="w-full bg-dark-950 border border-dark-700 rounded-xl px-3 py-2.5 text-sm text-white focus:border-brand outline-none">
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Порог проверки (₽)</label>
-                                    <input type="number" step="0.01" id="f-threshold" required value="${item ? item.threshold : ''}" class="w-full bg-dark-950 border border-dark-700 rounded-xl px-4 py-2.5 text-sm text-white focus:border-brand outline-none">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Источник / Ссылка</label>
-                                    <input type="text" id="f-source" value="${item ? item.source : ''}" class="w-full bg-dark-950 border border-dark-700 rounded-xl px-4 py-2.5 text-sm text-white focus:border-brand outline-none">
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Сигнал для проверки</label>
-                                <textarea id="f-signal" rows="2" class="w-full bg-dark-950 border border-dark-700 rounded-xl px-4 py-2 text-sm text-white focus:border-brand outline-none">${item ? item.signal : ''}</textarea>
-                            </div>
-                            <div class="flex justify-end gap-3 pt-4 border-t border-dark-700">
-                                <button type="button" onclick="closeModalCustom()" class="px-5 py-2.5 rounded-xl bg-dark-800 text-slate-300 hover:bg-dark-700 text-sm font-semibold transition">Отмена</button>
-                                <button type="submit" class="px-6 py-2.5 rounded-xl bg-brand hover:bg-brand-hover text-white text-sm font-semibold shadow-lg shadow-brand/25 transition">Сохранить</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            `;
-            document.getElementById('modal-root').innerHTML = modalHTML;
-        };
-
-        window.closeModalCustom = function() {
-            document.getElementById('modal-root').innerHTML = '';
-        };
-
-        window.submitItemForm = function(e, itemId) {
-            e.preventDefault();
-            const newItemData = {
-                id: itemId || ('item_' + Date.now()),
-                item: document.getElementById('f-item').value,
-                game: document.getElementById('f-game').value,
-                group: document.getElementById('f-group').value,
-                rarity: document.getElementById('f-rarity').value,
-                from: parseFloat(document.getElementById('f-from').value) || 0,
-                to: document.getElementById('f-to').value,
-                threshold: parseFloat(document.getElementById('f-threshold').value) || 0,
-                signal: document.getElementById('f-signal').value,
-                source: document.getElementById('f-source').value
-            };
-
-            if (itemId) {
-                const idx = state.itemsList.findIndex(i => i.id === itemId);
-                if (idx !== -1) state.itemsList[idx] = newItemData;
-            } else {
-                state.itemsList.unshift(newItemData);
-            }
-
-            saveLocalState();
-            closeModalCustom();
-            render();
-        };
-
-        window.deleteItem = function(itemId) {
-            if (confirm("Вы действительно хотите удалить эту позицию из справочника?")) {
-                state.itemsList = state.itemsList.filter(i => i.id !== itemId);
-                saveLocalState();
-                render();
-            }
-        };
-
-        // Render Functions
-        function render() {
-            const appEl = document.getElementById('app');
-
-            // 1. Modal Alert Rendering
-            let modalAlertHTML = '';
-            if (state.modalMessage) {
-                modalAlertHTML = `
-                    <div class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                        <div class="bg-dark-900 border border-dark-700 rounded-2xl w-full max-w-md p-6 shadow-2xl text-center">
-                            <h3 class="text-lg font-bold text-white mb-2">${state.modalMessage.title}</h3>
-                            <p class="text-sm text-slate-300 mb-6">${state.modalMessage.text}</p>
-                            <button onclick="closeModal()" class="w-full py-2.5 rounded-xl bg-brand hover:bg-brand-hover text-white text-sm font-semibold transition">Понятно</button>
-                        </div>
-                    </div>
-                `;
-            }
-
-            // 2. Auth Views (Login / Register)
-            if (!state.user) {
-                if (state.view === 'register') {
-                    appEl.innerHTML = `
-                        <div class="flex-1 flex items-center justify-center p-4 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-dark-950 to-dark-950">
-                            <div class="bg-dark-900/90 backdrop-blur-xl border border-dark-700 rounded-3xl p-8 w-full max-w-md shadow-2xl">
-                                <div class="text-center mb-8">
-                                    <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand to-indigo-400 mx-auto flex items-center justify-center text-white text-2xl font-black mb-3 shadow-lg shadow-brand/30">S</div>
-                                    <h1 class="text-2xl font-extrabold text-white">Регистрация сотрудника</h1>
-                                    <p class="text-xs text-slate-400 mt-1">Введите персональный ключ доступа, выданный администратором</p>
-                                </div>
-                                <form onsubmit="handleRegister(event)" class="space-y-4">
-                                    <div>
-                                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Имя сотрудника / Логин</label>
-                                        <input type="text" id="reg-username" required placeholder="например: alex_starvell" class="w-full bg-dark-950 border border-dark-700 rounded-xl px-4 py-3 text-sm text-white focus:border-brand outline-none">
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Ключ сотрудника</label>
-                                        <input type="text" id="reg-key" required placeholder="STARVELL-XXXX-XXXX" class="w-full bg-dark-950 border border-dark-700 rounded-xl px-4 py-3 text-sm text-white focus:border-brand outline-none font-mono">
-                                    </div>
-                                    <button type="submit" class="w-full py-3 rounded-xl bg-brand hover:bg-brand-hover text-white font-semibold text-sm shadow-lg shadow-brand/30 transition">Зарегистрироваться</button>
-                                </form>
-                                <div class="text-center mt-6">
-                                    <button onclick="state.view='login'; render();" class="text-xs text-brand hover:underline">Уже есть аккаунт? Войти</button>
-                                </div>
-                            </div>
-                        </div>
-                        ${modalAlertHTML}
-                    `;
-                } else {
-                    appEl.innerHTML = `
-                        <div class="flex-1 flex items-center justify-center p-4 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-dark-950 to-dark-950">
-                            <div class="bg-dark-900/90 backdrop-blur-xl border border-dark-700 rounded-3xl p-8 w-full max-w-md shadow-2xl">
-                                <div class="text-center mb-8">
-                                    <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand to-indigo-400 mx-auto flex items-center justify-center text-white text-2xl font-black mb-3 shadow-lg shadow-brand/30">S</div>
-                                    <h1 class="text-2xl font-extrabold text-white">Starvell Price Center</h1>
-                                    <p class="text-xs text-slate-400 mt-1">Авторизация для сотрудников и администраторов</p>
-                                </div>
-                                <form onsubmit="handleLogin(event)" class="space-y-4">
-                                    <div>
-                                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Имя пользователя / логин</label>
-                                        <input type="text" id="login-username" required placeholder="admin или ваше имя" class="w-full bg-dark-950 border border-dark-700 rounded-xl px-4 py-3 text-sm text-white focus:border-brand outline-none">
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-bold text-slate-400 uppercase mb-1">Пароль или личный ключ</label>
-                                        <input type="password" id="login-pass" required placeholder="Пароль / Ключ сотрудника" class="w-full bg-dark-950 border border-dark-700 rounded-xl px-4 py-3 text-sm text-white focus:border-brand outline-none font-mono">
-                                    </div>
-                                    <button type="submit" class="w-full py-3 rounded-xl bg-brand hover:bg-brand-hover text-white font-semibold text-sm shadow-lg shadow-brand/30 transition">Войти в систему</button>
-                                </form>
-                                <div class="text-center mt-6 flex justify-between items-center text-xs">
-                                    <span class="text-slate-500">Тестовый админ: admin / admin123</span>
-                                    <button onclick="state.view='register'; render();" class="text-brand hover:underline font-semibold">Регистрация</button>
-                                </div>
-                            </div>
-                        </div>
-                        ${modalAlertHTML}
-                    `;
-                }
-                return;
-            }
-
-            // 3. Main Authenticated Application Views (Catalog vs Admin Panel)
-            const isAdmin = state.user.role === 'admin';
-
-            appEl.innerHTML = `
-                <div class="app grid grid-cols-1 md:grid-cols-[250px_minmax(0,1fr)] min-h-screen">
-                    <!-- Sidebar Navigation -->
-                    <aside class="sidebar bg-dark-900 border-r border-dark-700 p-6 flex flex-col gap-6">
-                        <div class="brand flex items-center gap-3 pb-5 border-b border-dark-700">
-                            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand to-indigo-400 grid place-items-center text-white font-black text-xl shadow-md shadow-brand/30">S</div>
-                            <div>
-                                <div class="font-extrabold text-sm tracking-wide text-white">PRICE WATCH</div>
-                                <div class="text-[10px] text-slate-400">Starvell Security Suite</div>
-                            </div>
-                        </div>
-
-                        <!-- User Profile Card -->
-                        <div class="bg-dark-950 border border-dark-700/80 rounded-xl p-3.5 flex items-center gap-3">
-                            <div class="w-9 h-9 rounded-lg bg-indigo-500/20 text-brand font-bold flex items-center justify-center text-sm uppercase">${state.user.username[0]}</div>
-                            <div class="overflow-hidden flex-1">
-                                <div class="text-xs font-bold text-white truncate">${state.user.username}</div>
-                                <div class="text-[10px] text-indigo-400 font-medium">${isAdmin ? '🛡️ Администратор' : '👤 Сотрудник'}</div>
-                            </div>
-                        </div>
-
-                        <!-- Navigation Tabs -->
-                        <div>
-                            <div class="text-[10px] font-extrabold tracking-widest text-slate-400 uppercase mb-2 px-1">Меню</div>
-                            <div class="flex flex-col gap-1.5">
-                                <button onclick="state.view='catalog'; render();" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${state.view === 'catalog' ? 'bg-brand text-white shadow-lg shadow-brand/25' : 'text-slate-400 hover:bg-dark-800 hover:text-white'}">
-                                    <span>📊</span> Каталог и цены
-                                </button>
-                                ${isAdmin ? `
-                                    <button onclick="state.view='admin'; render();" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition ${state.view === 'admin' ? 'bg-brand text-white shadow-lg shadow-brand/25' : 'text-slate-400 hover:bg-dark-800 hover:text-white'}">
-                                        <span>⚙️</span> Панель администратора
-                                    </button>
-                                ` : ''}
-                            </div>
-                        </div>
-
-                        <div class="mt-auto pt-4 border-t border-dark-700">
-                            <button onclick="logout()" class="w-full py-2.5 px-4 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-semibold transition flex items-center justify-center gap-2">
-                                <span>🚪</span> Выйти из системы
-                            </button>
-                        </div>
-                    </aside>
-
-                    <!-- Main Dynamic Content Area -->
-                    <main class="main p-6 lg:p-10 max-w-[1700px] w-full mx-auto">
-                        ${state.view === 'admin' && isAdmin ? renderAdminPanel() : renderCatalogView()}
-                    </main>
-                </div>
-                ${modalAlertHTML}
-            `;
-        }
-
-        // Sub-render: Catalog & Signals View
-        function renderCatalogView() {
-            const groups = ['Все игры', 'Roblox', 'Rust', 'MM2', 'Другие игры'];
-            
-            // Filter & Sort Logic
-            let filtered = state.itemsList.filter(x =>
-                (state.filterGroup === 'Все игры' || x.group === state.filterGroup) &&
-                (!state.searchQuery || [x.item, x.game, x.rarity, x.source, x.signal].join(' ').toLowerCase().includes(state.searchQuery.toLowerCase()))
-            );
-
-            if (state.sortBy === 'low') filtered.sort((a, b) => (Number(a.from) || Infinity) - (Number(b.from) || Infinity));
-            if (state.sortBy === 'high') filtered.sort((a, b) => (Number(b.from) || 0) - (Number(a.from) || 0));
-            if (state.sortBy === 'name') filtered.sort((a, b) => a.item.localeCompare(b.item, 'ru'));
-
-            const totalFiltered = filtered.length;
-            const rows = state.limitCount !== 'all' ? filtered.slice(0, Number(state.limitCount)) : filtered;
-
-            const rub = v => typeof v === 'number' ? v.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₽' : (v || '—');
-            const linkify = s => String(s ?? '').replace(/(https?:\/\/[^\s|;]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-indigo-400 underline hover:text-indigo-300">$1</a>');
-
-            const isAdmin = state.user.role === 'admin';
-
-            return `
-                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-                    <div>
-                        <div class="text-[10px] font-extrabold tracking-widest text-indigo-400 uppercase mb-1">Справочник цен и сигналов Starvell</div>
-                        <h1 class="text-2xl lg:text-3xl font-black text-white">Мониторинг позиций и антифрод-сигналы</h1>
-                    </div>
-                    ${isAdmin ? `
-                        <button onclick="saveItemModal()" class="px-5 py-2.5 rounded-xl bg-brand hover:bg-brand-hover text-white text-xs font-bold shadow-lg shadow-brand/25 transition flex items-center gap-2">
-                            <span>+</span> Добавить позицию
-                        </button>
-                    ` : ''}
-                </div>
-
-                <!-- Stats Cards -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                    <div class="bg-dark-900 border border-dark-700 rounded-2xl p-5 shadow-sm">
-                        <div class="text-2xl lg:text-3xl font-black text-white">${state.itemsList.length}</div>
-                        <div class="text-xs text-slate-400 mt-1">Всего позиций</div>
-                    </div>
-                    <div class="bg-dark-900 border border-dark-700 rounded-2xl p-5 shadow-sm">
-                        <div class="text-2xl lg:text-3xl font-black text-emerald-400">${state.itemsList.filter(x => x.group === 'Roblox').length}</div>
-                        <div class="text-xs text-slate-400 mt-1">Roblox лоты</div>
-                    </div>
-                    <div class="bg-dark-900 border border-dark-700 rounded-2xl p-5 shadow-sm">
-                        <div class="text-2xl lg:text-3xl font-black text-amber-400">${state.itemsList.filter(x => x.group === 'MM2').length}</div>
-                        <div class="text-xs text-slate-400 mt-1">MM2 лоты</div>
-                    </div>
-                    <div class="bg-dark-900 border border-dark-700 rounded-2xl p-5 shadow-sm">
-                        <div class="text-2xl lg:text-3xl font-black text-indigo-400">${state.itemsList.filter(x => x.group !== 'Roblox' && x.group !== 'MM2').length}</div>
-                        <div class="text-xs text-slate-400 mt-1">Другие игры</div>
-                    </div>
-                </div>
-
-                <!-- Category Tabs Filter -->
-                <div class="flex gap-2 overflow-x-auto pb-2 mb-4">
-                    ${groups.map(g => `
-                        <button onclick="state.filterGroup='${g}'; render();" class="px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${state.filterGroup === g ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' : 'bg-dark-900 text-slate-400 border border-dark-700 hover:text-white'}">
-                            ${g}
-                        </button>
-                    `).join('')}
-                </div>
-
-                <!-- Search and Controls Toolbar -->
-                <div class="bg-dark-900 border border-dark-700 rounded-2xl p-4 flex flex-wrap gap-3 items-center mb-6">
-                    <div class="flex-1 min-w-[260px] relative">
-                        <span class="absolute left-4 top-3 text-slate-500">🔍</span>
-                        <input type="search" id="catalog-search" value="${state.searchQuery}" oninput="state.searchQuery=this.value; render();" placeholder="Поиск по предмету, игре, редкости или сигналу..." class="w-full bg-dark-950 border border-dark-700 rounded-xl pl-11 pr-4 py-2.5 text-xs text-white focus:border-brand outline-none">
-                    </div>
-                    <select onchange="state.sortBy=this.value; render();" class="bg-dark-950 border border-dark-700 rounded-xl px-4 py-2.5 text-xs text-slate-300 outline-none">
-                        <option value="default" ${state.sortBy === 'default' ? 'selected' : ''}>Сортировка: по умолчанию</option>
-                        <option value="low" ${state.sortBy === 'low' ? 'selected' : ''}>Сначала дешевле</option>
-                        <option value="high" ${state.sortBy === 'high' ? 'selected' : ''}>Сначала дороже</option>
-                        <option value="name" ${state.sortBy === 'name' ? 'selected' : ''}>По названию А–Я</option>
-                    </select>
-                    <select onchange="state.limitCount=this.value; render();" class="bg-dark-950 border border-dark-700 rounded-xl px-4 py-2.5 text-xs text-slate-300 outline-none">
-                        <option value="25" ${state.limitCount === '25' ? 'selected' : ''}>25 строк</option>
-                        <option value="50" ${state.limitCount === '50' ? 'selected' : ''}>50 строк</option>
-                        <option value="all" ${state.limitCount === 'all' ? 'selected' : ''}>Все строки</option>
-                    </select>
-                </div>
-
-                <!-- Table Box -->
-                <div class="bg-dark-900 border border-dark-700 rounded-2xl shadow-xl overflow-hidden">
-                    <div class="overflow-x-auto max-h-[65vh]">
-                        <table class="w-full text-left border-collapse min-w-[1250px]">
-                            <thead>
-                                <tr class="bg-dark-800 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 sticky top-0 z-10 border-b border-dark-700">
-                                    <th class="p-4">Товар / позиция</th>
-                                    <th class="p-4">Игра</th>
-                                    <th class="p-4">Тип / редкость</th>
-                                    <th class="p-4">Цена от</th>
-                                    <th class="p-4">Цена до</th>
-                                    <th class="p-4">Порог проверки</th>
-                                    <th class="p-4">Сигнал для проверки</th>
-                                    <th class="p-4">Источник</th>
-                                    ${isAdmin ? '<th class="p-4 text-center">Действия</th>' : ''}
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-dark-700/60 text-xs text-slate-300">
-                                ${rows.length === 0 ? `
-                                    <tr><td colspan="${isAdmin ? 9 : 8}" class="p-10 text-center text-slate-500">Ничего не найдено. Измените параметры поиска.</td></tr>
-                                ` : rows.map(x => `
-                                    <tr class="hover:bg-dark-800/50 transition">
-                                        <td class="p-4 font-bold text-white">${x.item}</td>
-                                        <td class="p-4"><span class="px-2.5 py-1 rounded-md bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-[10px] font-bold">${x.game}</span></td>
-                                        <td class="p-4 text-slate-400">${x.rarity || '—'}</td>
-                                        <td class="p-4 font-mono font-semibold text-white">${rub(x.from)}</td>
-                                        <td class="p-4 font-mono text-slate-400">${rub(x.to)}</td>
-                                        <td class="p-4 font-mono font-bold text-amber-400">${rub(x.threshold)}</td>
-                                        <td class="p-4 max-w-[320px] text-slate-400 leading-relaxed">${x.signal}</td>
-                                        <td class="p-4 max-w-[220px] text-slate-400 truncate">${linkify(x.source)}</td>
-                                        ${isAdmin ? `
-                                            <td class="p-4 text-center whitespace-nowrap">
-                                                <button onclick="saveItemModal('${x.id}')" class="p-1.5 rounded-lg bg-dark-800 hover:bg-dark-700 text-indigo-400 mr-1" title="Редактировать">✏️</button>
-                                                <button onclick="deleteItem('${x.id}')" class="p-1.5 rounded-lg bg-dark-800 hover:bg-red-500/20 text-red-400" title="Удалить">🗑️</button>
-                                            </td>
-                                        ` : ''}
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            `;
-        }
-
-        // Sub-render: Admin Panel (Manage Users & Personal Employee Keys)
-        function renderAdminPanel() {
-            return `
-                <div class="flex justify-between items-center mb-8 pb-4 border-b border-dark-700">
-                    <div>
-                        <div class="text-[10px] font-extrabold tracking-widest text-indigo-400 uppercase mb-1">Центр администрирования Starvell</div>
-                        <h1 class="text-2xl lg:text-3xl font-black text-white">Управление сотрудниками и ключами доступа</h1>
-                    </div>
-                    <button onclick="generateKey()" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/25 transition flex items-center gap-2">
-                        <span>🔑</span> Сгенерировать ключ сотрудника
-                    </button>
-                </div>
-
-                <!-- Keys Management Section -->
-                <div class="mb-10">
-                    <h2 class="text-lg font-bold text-white mb-4">Активные ключи сотрудников</h2>
-                    <div class="bg-dark-900 border border-dark-700 rounded-2xl overflow-hidden shadow-xl">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-dark-800 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 border-b border-dark-700">
-                                    <th class="p-4">Ключ доступа</th>
-                                    <th class="p-4">Роль</th>
-                                    <th class="p-4">Статус</th>
-                                    <th class="p-4">Дата создания</th>
-                                    <th class="p-4 text-center">Действия</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-dark-700/60 text-xs text-slate-300">
-                                ${state.keysList.map(k => `
-                                    <tr class="hover:bg-dark-800/50 transition">
-                                        <td class="p-4 font-mono font-bold text-indigo-300">${k.key}</td>
-                                        <td class="p-4"><span class="px-2 py-0.5 rounded bg-dark-800 text-slate-300">${k.role}</span></td>
-                                        <td class="p-4">
-                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${k.active ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}">
-                                                ${k.active ? 'Активен' : 'Заблокирован'}
-                                            </span>
-                                        </td>
-                                        <td class="p-4 text-slate-400">${new Date(k.createdAt).toLocaleDateString()}</td>
-                                        <td class="p-4 text-center whitespace-nowrap">
-                                            <button onclick="toggleKeyStatus('${k.key}')" class="px-3 py-1 rounded-lg bg-dark-800 hover:bg-dark-700 text-slate-300 text-xs mr-2">
-                                                ${k.active ? 'Блокировать' : 'Активировать'}
-                                            </button>
-                                            <button onclick="deleteKey('${k.key}')" class="p-1.5 rounded-lg bg-dark-800 hover:bg-red-500/20 text-red-400" title="Удалить">🗑️</button>
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Users Management Section -->
-                <div>
-                    <h2 class="text-lg font-bold text-white mb-4">Зарегистрированные пользователи</h2>
-                    <div class="bg-dark-900 border border-dark-700 rounded-2xl overflow-hidden shadow-xl">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-dark-800 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 border-b border-dark-700">
-                                    <th class="p-4">Имя / Логин</th>
-                                    <th class="p-4">Роль</th>
-                                    <th class="p-4">Использованный ключ</th>
-                                    <th class="p-4">Регистрация</th>
-                                    <th class="p-4 text-center">Действия</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-dark-700/60 text-xs text-slate-300">
-                                ${state.usersList.map(u => `
-                                    <tr class="hover:bg-dark-800/50 transition">
-                                        <td class="p-4 font-bold text-white">${u.username}</td>
-                                        <td class="p-4"><span class="px-2.5 py-1 rounded-md ${u.role === 'admin' ? 'bg-brand/20 text-indigo-300 border border-brand/30' : 'bg-dark-800 text-slate-300'} text-[10px] font-bold">${u.role}</span></td>
-                                        <td class="p-4 font-mono text-slate-400">${u.employeeKey || '—'}</td>
-                                        <td class="p-4 text-slate-400">${new Date(u.createdAt).toLocaleDateString()}</td>
-                                        <td class="p-4 text-center">
-                                            ${u.uid !== 'admin_root' ? `
-                                                <button onclick="deleteUser('${u.uid}')" class="p-1.5 rounded-lg bg-dark-800 hover:bg-red-500/20 text-red-400" title="Удалить пользователя">🗑️</button>
-                                            ` : '<span class="text-slate-600 text-[10px]">Системный</span>'}
-                                        </td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            `;
-        }
-
-        // Initialize App on Window Load
-        window.onload = function() {
-            loadLocalState();
-            render();
-        };
-    </script>
+document.getElementById('search').addEventListener('input', render);
+document.getElementById('sort').addEventListener('change', render);
+render();
+</script>
 </body>
 </html>
