@@ -3,116 +3,119 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Админ-панель · Price Watch</title>
+<title>Админ-панель</title>
 <style>
-body{margin:0;background:#080d18;color:#edf3fc;font:14px Inter,sans-serif;padding:30px}
-.wrap{max-width:1000px;margin:0 auto}
-.card{background:#101827;border:1px solid #26344a;padding:20px;border-radius:12px;margin-bottom:20px}
-h2{margin-top:0;color:#579dff}
-button{background:#579dff;border:0;color:#080d18;padding:8px 14px;border-radius:6px;font-weight:700;cursor:pointer}
-button:hover{background:#74b5ff}
-.btn-red{background:#833;color:#faa}
-table{width:100%;border-collapse:collapse;margin-top:10px}
-th,td{padding:10px;border-bottom:1px solid #202d41;text-align:left;font-size:12px}
-th{color:#91a1b8}
-input{background:#0b1321;border:1px solid #2a3a51;color:#fff;padding:8px;border-radius:6px;width:100%;margin-top:5px;box-sizing:border-box}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+body{margin:0;background:#121417;color:#e3e5e8;font:13px -apple-system,sans-serif;padding:24px}
+.wrap{max-width:900px;margin:0 auto}
+.card{background:#1a1d21;border:1px solid #2c3038;padding:16px;border-radius:8px;margin-bottom:16px}
+h2{margin:0 0 12px;font-size:14px;color:#fff}
+button{background:#2787f5;color:#fff;border:0;padding:7px 12px;border-radius:6px;font-weight:600;cursor:pointer}
+button:hover{background:#1b73d1}
+.btn-red{background:#e04848}
+.btn-red:hover{background:#c73b3b}
+table{width:100%;border-collapse:collapse;margin-top:8px}
+th,td{padding:8px 10px;border-bottom:1px solid #2c3038;text-align:left;font-size:12px}
+th{color:#8a9ba8}
+input{background:#121417;border:1px solid #2c3038;color:#fff;padding:6px 8px;border-radius:6px;width:100%;margin-top:4px;box-sizing:border-box}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>⚙️ Панель Администратора</h1>
-  <p><a href="index.html" style="color:#579dff">← Вернуться на главную</a></p>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h1 style="margin:0;font-size:18px">Панель администратора</h1>
+    <a href="index.html" style="color:#2787f5;text-decoration:none">← На главную</a>
+  </div>
 
   <div class="grid">
     <div class="card">
-      <h2>🔑 Генерация ключа сотрудника</h2>
-      <p style="font-size:12px;color:#91a1b8">Создайте уникальный ключ для нового сотрудника компании.</p>
-      <button onclick="generateKey()">Сгенерировать ключ</button>
-      <div id="newKeyBox" style="margin-top:10px;font-weight:bold;color:#54d6a0"></div>
+      <h2>Генерация ключа сотрудника</h2>
+      <button onclick="makeKey()">Создать ключ</button>
+      <div id="keyOut" style="margin-top:8px;font-family:monospace;color:#f5c85b"></div>
     </div>
 
     <div class="card">
-      <h2>👥 Зарегистрированные сотрудники</h2>
-      <table>
-        <thead><tr><th>Логин</th><th>Роль</th></tr></thead>
-        <tbody id="usersList"></tbody>
-      </table>
+      <h2>Управление правами админа</h2>
+      <div id="usersList"></div>
     </div>
   </div>
 
   <div class="card">
-    <h2>➕ Добавить товар / позицию в справочник</h2>
+    <h2>Добавить товар в базу</h2>
     <div class="grid">
       <div>
-        <label>Название предмета</label>
-        <input id="iName" placeholder="Например: 80 Robux">
-        <label>Игра / Категория</label>
-        <input id="iGame" placeholder="Roblox / MM2 / Rust">
-        <label>Редкость / Тип</label>
-        <input id="iRarity" placeholder="Игровая валюта">
-        <label>Группа для меню</label>
-        <input id="iGroup" placeholder="Roblox">
+        <label>Название</label><input id="iName">
+        <label>Игра</label><input id="iGame">
+        <label>Тип</label><input id="iRarity">
+        <label>Раздел меню</label><input id="iGroup" value="Roblox">
       </div>
       <div>
-        <label>Цена ОТ (₽)</label>
-        <input id="iFrom" type="number" placeholder="64.65">
-        <label>Цена ДО (₽)</label>
-        <input id="iTo" placeholder="106.49">
-        <label>Порог проверки (₽)</label>
-        <input id="iThreshold" type="number" placeholder="38.79">
-        <label>Сигнал для проверки</label>
-        <input id="iSignal" placeholder="Описание подозрительности">
+        <label>Цена от</label><input id="iFrom" type="number">
+        <label>Цена до</label><input id="iTo">
+        <label>Порог</label><input id="iThreshold" type="number">
+        <label>Сигнал</label><input id="iSignal">
       </div>
     </div>
-    <div style="margin-top:15px">
-      <label>Ссылка на источник</label>
-      <input id="iSource" placeholder="https://starvell.com/...">
-      <button onclick="addItem()" style="margin-top:15px">Добавить в базу</button>
-    </div>
+    <label style="display:block;margin-top:8px">Источник (Ссылка)</label><input id="iSource">
+    <button onclick="addItem()" style="margin-top:12px">Сохранить товар</button>
   </div>
 </div>
 
+<script src="app.js"></script>
 <script>
-// Проверка прав админа
-const currentUser = JSON.parse(localStorage.getItem('sp_current_user') || 'null');
-if(!currentUser || currentUser.role !== 'admin') {
-  alert('Доступ запрещен! Только для администраторов.');
+// Жесткая проверка прав администратора
+const user = getCurrentUser();
+if(!user || !isAdmin(user.username)) {
+  alert('Доступ запрещен. Только для администраторов.');
   location.href = 'index.html';
 }
 
 function renderAdmin() {
-  // Список пользователей
-  const users = JSON.parse(localStorage.getItem('sp_users') || '[]');
-  document.getElementById('usersList').innerHTML = users.map(u=>`
-    <tr><td>${u.username}</td><td>${u.role}</td></tr>
+  const users = getUsers();
+  const admins = getAdmins();
+  
+  document.getElementById('usersList').innerHTML = users.map(u => `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:12px">
+      <span><b>${u.username}</b> (${u.role})</span>
+      ${u.username !== 'admin' ? `<button onclick="toggleAdmin('${u.username}')" class="${admins.includes(u.username)?'btn-red':''}">${admins.includes(u.username)?'Снять админа':'Сделать админом'}</button>` : ''}
+    </div>
   `).join('');
 }
 
-function generateKey() {
+function makeKey() {
+  const k = 'KEY-' + Math.random().toString(36).substring(2, 8).toUpperCase();
   const keys = JSON.parse(localStorage.getItem('sp_keys') || '[]');
-  const newKey = 'STARVELL-KEY-' + Math.random().toString(36).substring(2, 8).toUpperCase();
-  keys.push(newKey);
+  keys.push(k);
   localStorage.setItem('sp_keys', JSON.stringify(keys));
-  document.getElementById('newKeyBox').textContent = 'Сгенерирован ключ: ' + newKey;
+  document.getElementById('keyOut').textContent = k;
+}
+
+function toggleAdmin(username) {
+  let admins = getAdmins();
+  if(admins.includes(username)) {
+    admins = admins.filter(a => a !== username);
+  } else {
+    admins.push(username);
+  }
+  localStorage.setItem('sp_admins', JSON.stringify(admins));
+  renderAdmin();
 }
 
 function addItem() {
   const items = JSON.parse(localStorage.getItem('sp_items') || '[]');
-  const newItem = {
+  items.push({
     item: document.getElementById('iName').value,
     game: document.getElementById('iGame').value,
     rarity: document.getElementById('iRarity').value,
-    group: document.getElementById('iGroup').value || 'Другие игры',
+    group: document.getElementById('iGroup').value,
     from: Number(document.getElementById('iFrom').value),
     to: document.getElementById('iTo').value,
     threshold: Number(document.getElementById('iThreshold').value),
     signal: document.getElementById('iSignal').value,
     source: document.getElementById('iSource').value
-  };
-  items.push(newItem);
+  });
   localStorage.setItem('sp_items', JSON.stringify(items));
-  alert('Товар успешно добавлен в справочник!');
+  alert('Добавлено!');
   location.reload();
 }
 
