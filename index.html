@@ -5,55 +5,46 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PRICE WATCH · Справочник цен</title>
 <style>
-:root{--bg:#080d18;--panel:#101827;--panel2:#141f31;--line:#26344a;--text:#edf3fc;--muted:#91a1b8;--blue:#579dff;--yellow:#f5c85b;--green:#54d6a0;--red:#ff8585}
+:root{--bg:#121417;--panel:#1a1d21;--border:#2c3038;--text:#e3e5e8;--muted:#8a9ba8;--blue:#2787f5;--blue-hover:#1b73d1;--yellow:#f5c85b;--red:#e04848}
 *{box-sizing:border-box}
-body{margin:0;background:linear-gradient(135deg,#080d18 0%,#0b1322 55%,#0d1727 100%);color:var(--text);font:14px/1.5 Inter,sans-serif;min-height:100vh}
-.app{display:grid;grid-template-columns:245px minmax(0,1fr);min-height:100vh}
-.sidebar{position:sticky;top:0;height:100vh;background:#0b1220;border-right:1px solid #1d2a3d;padding:25px 16px;display:flex;flex-direction:column;gap:24px}
-.brand{display:flex;align-items:center;gap:12px;padding:0 8px 22px;border-bottom:1px solid #202c40}
-.brand-mark{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,#4a9cff,#6b70ff);display:grid;place-items:center;color:white;font-weight:900}
-.brand-title{font-weight:800;font-size:15px}
-.brand-sub{color:var(--muted);font-size:11px}
-.nav-label{font-size:10px;font-weight:800;letter-spacing:.14em;color:#71839d;text-transform:uppercase;padding:0 12px;margin-bottom:8px}
-.tabs{display:flex;flex-direction:column;gap:6px}
-.tab{width:100%;display:flex;align-items:center;gap:11px;text-align:left;border:1px solid transparent;color:#aebbd0;background:transparent;border-radius:10px;padding:11px 12px;cursor:pointer;font:inherit;font-weight:600}
-.tab:hover{background:#121e30;color:white}
-.tab.active{background:linear-gradient(90deg,#1b3e68,#172b45);border-color:#2d5d91;color:#fff}
-.user-panel{margin-top:auto;padding:14px;border:1px solid #26354b;background:#101a2a;border-radius:12px;display:flex;flex-direction:column;gap:10px}
-.user-info{font-size:12px;color:#aab9ce}
-.user-info strong{display:block;color:#eaf2fc}
-.btn{padding:8px 12px;border-radius:8px;border:1px solid #2d5d91;background:#172b45;color:#fff;cursor:pointer;font-weight:600;font-size:12px;text-align:center;text-decoration:none;display:inline-block}
-.btn:hover{background:#1f395c}
-.btn-red{background:#522;border-color:#833;color:#faa}
-.btn-red:hover{background:#622}
-.main{padding:30px clamp(18px,3vw,42px);max-width:1800px;width:100%;margin:0 auto}
-.topline{display:flex;justify-content:space-between;align-items:center;margin-bottom:23px}
-.hero h1{font-size:clamp(27px,3vw,38px);margin:8px 0 9px}
-.hero p{color:var(--muted);margin:0;font-size:13px}
-.controls{padding:13px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:13px;background:#101827;border:1px solid #26344a;border-radius:13px}
-.controls input,.controls select{background:#0b1321;color:var(--text);border:1px solid #2a3a51;border-radius:9px;padding:11px 12px;font:inherit;font-size:12px;outline:none}
-.controls input{flex:1;min-width:240px}
-.tablebox{overflow:hidden;background:#0f1827;border:1px solid #26344a;border-radius:14px}
-.table-scroll{overflow:auto;max-height:66vh}
-table{width:100%;border-collapse:collapse;min-width:1200px}
-th{position:sticky;top:0;background:#18263a;color:#a9bdd7;text-align:left;font-size:10px;text-transform:uppercase;padding:14px;z-index:2}
-td{padding:14px;border-bottom:1px solid #202d41;font-size:12px;color:#c4d0e0}
-tbody tr:hover{background:#192a40}
-.tag{padding:4px 9px;border-radius:6px;background:#1a2f49;border:1px solid #2a4565;color:#9dceff;font-size:10px;font-weight:750}
-.price{font-weight:650;color:#e3ecf9}
-.threshold{color:var(--yellow);font-weight:800}
+body{margin:0;background:var(--bg);color:var(--text);font:13px/1.4 -apple-system,blinkmacsysteminfo,"Segoe UI",roboto,helvetica,arial,sans-serif;min-height:100vh}
+.app{display:grid;grid-template-columns:230px minmax(0,1fr);min-height:100vh}
+.sidebar{background:var(--panel);border-right:1px solid var(--border);padding:20px;display:flex;flex-direction:column;gap:20px}
+.brand{font-weight:700;font-size:14px;color:#fff;padding-bottom:15px;border-bottom:1px solid var(--border)}
+.nav-label{font-size:10px;text-transform:uppercase;color:var(--muted);font-weight:600;letter-spacing:.05em;margin-bottom:6px}
+.tabs{display:flex;flex-direction:column;gap:4px}
+.tab{background:transparent;border:0;color:var(--muted);text-align:left;padding:8px 10px;border-radius:6px;cursor:pointer;font-weight:500}
+.tab:hover{background:#23272a;color:#fff}
+.tab.active{background:var(--blue);color:#fff}
+.user-panel{margin-top:auto;background:#16181b;border:1px solid var(--border);padding:12px;border-radius:8px;font-size:12px}
+.user-info{margin-bottom:8px;word-break:break-all}
+.btn{background:var(--blue);color:#fff;border:0;padding:6px 12px;border-radius:6px;cursor:pointer;font-weight:500;font-size:12px;text-decoration:none;display:inline-block;text-align:center;width:100%}
+.btn:hover{background:var(--blue-hover)}
+.btn-red{background:var(--red)}
+.btn-red:hover{background:#c73b3b}
+.main{padding:24px;max-width:1600px;margin:0 auto;width:100%}
+.topline{margin-bottom:20px}
+.topline h1{font-size:20px;margin:0 0 5px;color:#fff}
+.topline p{margin:0;color:var(--muted);font-size:12px}
+.controls{display:flex;gap:10px;margin-bottom:15px}
+.controls input,.controls select{background:var(--panel);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:6px;font:inherit;outline:none}
+.controls input{flex:1}
+.controls input:focus,.controls select:focus{border-color:var(--blue)}
+.tablebox{background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.table-scroll{overflow:auto;max-height:70vh}
+table{width:100%;border-collapse:collapse;min-width:1100px}
+th{position:sticky;top:0;background:#16181b;color:var(--muted);text-align:left;font-size:11px;text-transform:uppercase;padding:10px 14px;border-bottom:1px solid var(--border)}
+td{padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px}
+tr:hover{background:#1e2125}
+.tag{background:#23272a;border:1px solid var(--border);padding:2px 6px;border-radius:4px;font-size:11px;color:#99aab5}
+.price{font-weight:600;color:#fff}
+.threshold{color:var(--yellow);font-weight:600}
 </style>
 </head>
 <body>
 <div class="app">
   <aside class="sidebar">
-    <div class="brand">
-      <div class="brand-mark">S</div>
-      <div>
-        <div class="brand-title">PRICE WATCH</div>
-        <div class="brand-sub">Внутренний справочник</div>
-      </div>
-    </div>
+    <div class="brand">PRICE WATCH</div>
     <div>
       <div class="nav-label">Категории</div>
       <div class="tabs" id="tabs"></div>
@@ -63,33 +54,30 @@ tbody tr:hover{background:#192a40}
 
   <main class="main">
     <div class="topline">
-      <div class="hero">
-        <div style="color:#77b7ff;font-size:10px;font-weight:800;text-transform:uppercase">Защищенная система мониторинга</div>
-        <h1>Справочник цен и сигналов</h1>
-        <p>Актуальные диапазоны цен, пороги проверки и маркеры подозрительных лотов.</p>
-      </div>
+      <h1>Справочник цен и сигналов</h1>
+      <p>Оперативная база данных для проверки лотов</p>
     </div>
 
-    <section class="controls">
+    <div class="controls">
       <input id="search" placeholder="Поиск по предмету, игре или сигналу…">
       <select id="sort">
-        <option value="default">Сортировка: по умолчанию</option>
+        <option value="default">Сортировка: исходная</option>
         <option value="low">Сначала дешевле</option>
         <option value="high">Сначала дороже</option>
       </select>
-    </section>
+    </div>
 
-    <section class="tablebox">
+    <div class="tablebox">
       <div class="table-scroll">
         <table>
           <thead>
             <tr>
               <th>Товар / позиция</th>
-              <th>Игра / сервис</th>
-              <th>Редкость / тип</th>
+              <th>Игра</th>
+              <th>Тип</th>
               <th>Цена от</th>
               <th>Цена до</th>
-              <th>Порог проверки</th>
+              <th>Порог</th>
               <th>Сигнал</th>
               <th>Источник</th>
             </tr>
@@ -97,88 +85,10 @@ tbody tr:hover{background:#192a40}
           <tbody id="body"></tbody>
         </table>
       </div>
-    </section>
+    </div>
   </main>
 </div>
 
-<script>
-// Начальная база товаров, если еще ничего не создано
-const defaultData = [
-  {"item": "40 Robux", "game": "Roblox", "rarity": "Игровая валюта", "from": 64.65, "to": 106.49, "threshold": 38.79, "signal": "Цена ≤ 38.79 ₽ — проверить на мошенничество", "source": "https://starvell.com/roblox/packages", "group": "Roblox"},
-  {"item": "Гингерскоп (Gingerscope)", "game": "MM2", "rarity": "Ancient", "from": 40000, "to": 42999, "threshold": 24000, "signal": "Низкая цена — проверить продавца", "source": "https://paparoblo.ru", "group": "MM2"}
-];
-
-if(!localStorage.getItem('sp_items')) {
-  localStorage.setItem('sp_items', JSON.stringify(defaultData));
-}
-if(!localStorage.getItem('sp_users')) {
-  // Создаем админа по умолчанию: логин admin, пароль admin, ключ ADMIN-MASTER-KEY
-  localStorage.setItem('sp_users', JSON.stringify([
-    {username: 'admin', pass: 'admin', role: 'admin', key: 'ADMIN-MASTER-KEY'}
-  ]));
-}
-
-const currentUser = JSON.parse(localStorage.getItem('sp_current_user') || 'null');
-
-// Рендерим панель пользователя в сайдбаре
-const userPanel = document.getElementById('userPanel');
-if(currentUser) {
-  userPanel.innerHTML = `
-    <div class="user-info">Вы вошли как: <strong>${currentUser.username}</strong> (${currentUser.role === 'admin' ? '👑 Администратор' : '🛡 Сотрудник'})</div>
-    ${currentUser.role === 'admin' ? '<a href="admin.html" class="btn">⚙️ Панель админа</a>' : ''}
-    <button class="btn btn-red" onclick="logout()">Выйти</button>
-  `;
-} else {
-  userPanel.innerHTML = `
-    <div class="user-info">Вы не авторизованы</div>
-    <a href="auth.html" class="btn">🔑 Войти / Регистрация</a>
-  `;
-}
-
-function logout() {
-  localStorage.removeItem('sp_current_user');
-  location.reload();
-}
-
-const groups = ['Все игры', 'Roblox', 'MM2', 'Rust', 'Другие игры'];
-let activeGroup = 'Все игры';
-const tabs = document.getElementById('tabs');
-
-groups.forEach(g => {
-  let b = document.createElement('button');
-  b.className = 'tab' + (g === activeGroup ? ' active' : '');
-  b.textContent = g;
-  b.onclick = () => { activeGroup = g; document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.textContent===g)); render(); };
-  tabs.appendChild(b);
-});
-
-function render() {
-  const items = JSON.parse(localStorage.getItem('sp_items') || '[]');
-  const q = document.getElementById('search').value.toLowerCase();
-  const sort = document.getElementById('sort').value;
-
-  let filtered = items.filter(x => (activeGroup === 'Все игры' || x.group === activeGroup) && (!q || JSON.stringify(x).toLowerCase().includes(q)));
-  
-  if(sort === 'low') filtered.sort((a,b)=>a.from - b.from);
-  if(sort === 'high') filtered.sort((a,b)=>b.from - a.from);
-
-  document.getElementById('body').innerHTML = filtered.map(x=>`
-    <tr>
-      <td><b>${x.item}</b></td>
-      <td><span class="tag">${x.game}</span></td>
-      <td>${x.rarity}</td>
-      <td class="price">${x.from} ₽</td>
-      <td class="price">${x.to} ₽</td>
-      <td class="threshold">${x.threshold} ₽</td>
-      <td>${x.signal}</td>
-      <td><a href="${x.source}" target="_blank" style="color:#77b7ff">Ссылка</a></td>
-    </tr>
-  `).join('');
-}
-
-document.getElementById('search').addEventListener('input', render);
-document.getElementById('sort').addEventListener('change', render);
-render();
-</script>
+<script src="app.js"></script>
 </body>
 </html>
