@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Авторизация · Price Watch</title>
+<style>
+body{margin:0;background:#080d18;color:#edf3fc;font:14px Inter,sans-serif;display:grid;place-items:center;min-height:100vh}
+.box{background:#101827;border:1px solid #26344a;padding:30px;border-radius:14px;width:100%;max-width:380px;box-shadow:0 12px 30px #00000030}
+h2{margin-top:0;font-size:20px}
+.group{margin-bottom:15px}
+label{display:block;font-size:12px;color:#91a1b8;margin-bottom:5px}
+input{width:100%;background:#0b1321;border:1px solid #2a3a51;color:#fff;padding:10px;border-radius:8px;font:inherit;outline:none}
+input:focus{border-color:#579dff}
+.btn{width:100%;padding:11px;background:#579dff;border:0;color:#080d18;font-weight:700;border-radius:8px;cursor:pointer;margin-top:10px}
+.btn:hover{background:#74b5ff}
+.toggle{text-align:center;margin-top:15px;font-size:12px;color:#91a1b8;cursor:pointer}
+.toggle span{color:#579dff;text-decoration:underline}
+.err{color:#ff8585;font-size:12px;margin-bottom:10px}
+</style>
+</head>
+<body>
+<div class="box">
+  <h2 id="title">Вход в систему</h2>
+  <div id="err" class="err"></div>
+  <div class="group">
+    <label>Имя пользователя (Логин)</label>
+    <input id="user" placeholder="Введите логин">
+  </div>
+  <div class="group">
+    <label>Пароль</label>
+    <input id="pass" type="password" placeholder="Введите пароль">
+  </div>
+  <div class="group" id="keyGroup" style="display:none">
+    <label>Ключ доступа сотрудника</label>
+    <input id="regKey" placeholder="Выданный админом ключ">
+  </div>
+  <button class="btn" id="submitBtn" onclick="handleAuth()">Войти</button>
+  <div class="toggle" onclick="toggleMode()"><span id="toggleText">Нет аккаунта? Зарегистрироваться по ключу</span></div>
+  <div style="text-align:center;margin-top:15px"><a href="index.html" style="color:#91a1b8;font-size:11px">← На главную</a></div>
+</div>
+
+<script>
+let isReg = false;
+
+function toggleMode() {
+  isReg = !isReg;
+  document.getElementById('title').textContent = isReg ? 'Регистрация сотрудника' : 'Вход в систему';
+  document.getElementById('submitBtn').textContent = isReg ? 'Зарегистрироваться' : 'Войти';
+  document.getElementById('keyGroup').style.display = isReg ? 'block' : 'none';
+  document.getElementById('toggleText').textContent = isReg ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться по ключу';
+  document.getElementById('err').textContent = '';
+}
+
+function handleAuth() {
+  const u = document.getElementById('user').value.trim();
+  const p = document.getElementById('pass').value.trim();
+  const k = document.getElementById('regKey').value.trim();
+  const err = document.getElementById('err');
+  const users = JSON.parse(localStorage.getItem('sp_users') || '[]');
+  const keys = JSON.parse(localStorage.getItem('sp_keys') || '["ADMIN-MASTER-KEY"]');
+
+  if(!u || !p) {
+    err.textContent = 'Заполните все обязательные поля!';
+    return;
+  }
+
+  if(isReg) {
+    if(!keys.includes(k)) {
+      err.textContent = 'Неверный или уже использованный ключ доступа!';
+      return;
+    }
+    if(users.some(x => x.username === u)) {
+      err.textContent = 'Такое имя пользователя уже занято!';
+      return;
+    }
+    // Регистрируем
+    const newUser = {username: u, pass: p, role: k === 'ADMIN-MASTER-KEY' ? 'admin' : 'staff', key: k};
+    users.push(newUser);
+    localStorage.setItem('sp_users', JSON.stringify(users));
+    
+    // Удаляем использованный ключ
+    const newKeys = keys.filter(x => x !== k);
+    localStorage.setItem('sp_keys', JSON.stringify(newKeys));
+
+    localStorage.setItem('sp_current_user', JSON.stringify(newUser));
+    location.href = 'index.html';
+  } else {
+    const found = users.find(x => x.username === u && x.pass === p);
+    if(found) {
+      localStorage.setItem('sp_current_user', JSON.stringify(found));
+      location.href = 'index.html';
+    } else {
+      err.textContent = 'Неверный логин или пароль!';
+    }
+  }
+}
+</script>
+</body>
+</html>
