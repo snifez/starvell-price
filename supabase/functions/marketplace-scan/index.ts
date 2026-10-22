@@ -58,8 +58,49 @@ async function getHtml(url: string) {
   if (!html || html.length < 250) throw new Error(`Пустая или слишком короткая страница (${new URL(url).hostname})`);
   return html;
 }
-function anchors(html: string, base: string, source: Source, wanted: string) {
+function structuredOffers(html: string, base: string, source: Source, wanted: string) {
   const out: Array<Record<string, unknown>> = [];
+  // Many marketplaces embed listings in JSON-LD even when their visible cards are client-rendered.
+  const scripts = html.match(/<script\\b[^>]*type=["']application\\/ld\\+json["'][^>]*>[\\s\\S]*?<\\/script>/gi) || [];
+  for (const script of scripts) {
+    const raw = script.replace(/^<[\\s\\S]*?>/i, "").replace(/<\\/script>$/i, "").trim();
+    let parsed: unknown;
+    try { parsed = JSON.parse(raw); } catch { continue; }
+    const queue: unknown[] = [parsed];
+    while (queue.length) {
+      const node = queue.pop();
+      if (!node || typeof node !== "object") continue;
+      if (Array.isArray(node)) { queue.push(...node); continue; }
+      const obj = node as Record<string, unknown>;
+      if (obj["@graph"]) queue.push(obj["@graph"]);
+      const type = String(obj["@type"] || "").toLowerCase();
+      if (type.includes("product") || obj.offers) {
+        const title = String(obj.name || obj.headline || "");
+        const offerList = Array.isArray(obj.offers) ? obj.offers : [obj.offers];
+        if (title && nameMatches(title, wanted) && !blocked(title)) {
+          for (const offer of offerList) {
+            if (!offer || typeof offer !== "object") continue;
+            const o = offer as Record<string, unknown>;
+            const currency = String(o.priceCurrency || o.currency || "RUB").toUpperCase();
+            if (currency !== "RUB") continue;
+            const price = Number(String(o.price || o.lowPrice || "").replace(",", "."));
+            if (!Number.isFinite(price) || price <= 0 || price >= 1e8) continue;
+            let url = String(o.url || obj.url || base);
+            try { url = new URL(url, base).href; } catch { url = base; }
+            const imageRaw = Array.isArray(obj.image) ? obj.image[0] : obj.image;
+            let image = ""; try { const u = new URL(String(imageRaw || ""), base); if (u.protocol === "https:") image = u.href; } catch {}
+            out.push({ name: title, price, currency: "RUB", marketplace: source, url, image, sourceUrl: base });
+          }
+        }
+      }
+      // Handle nested product/offer structures commonly used by catalog JSON-LD.
+      for (const key of ["itemListElement", "item", "mainEntity", "hasOfferCatalog"]) if (obj[key]) queue.push(obj[key]);
+    }
+  }
+  return out;
+}
+function anchors(html: string, base: string, source: Source, wanted: string) {
+  const out: Array<Record<string, unknown>> = structuredOffers(html, base, source, wanted);
   const re = /<a\b([^>]*\bhref\s*=\s*(["'])(.*?)\2[^>]*)>([\s\S]*?)<\/a>/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) && out.length < 1800) {
@@ -138,5 +179,13 @@ Deno.serve(async (req: Request) => {
       return p.url===SOURCES.find(s=>s.name===p.source)?.url(name);
     }))));
   }
-  return response({ok:true,updatedAt:new Date().toISOString(),itemCount:results.length,sourceStatus:Object.fromEntries(["PlayerOK","Plati","GGSEL","Tradly","FunPay","Starvell"].map(source=>[source, pages.filter(p=>p.source===source&&p.html).length ? "public HTML fetched; see per-item results" : "no readable public HTML"])),results,note:"Только лоты, которые удалось прочитать из публичного HTML. Пустой результат не означает, что предмета нет на площадке."});
+  const foundCount = results.filter(r => Number(r.count) > 0).length;
+  const readableSources = [...new Set(pages.filter(p => p.html).map(p => p.source))];
+  const sourceStatus = Object.fromEntries(["PlayerOK","Plati","GGSEL","Tradly","FunPay","Starvell"].map(source => {
+    const sourcePages = pages.filter(p => p.source === source);
+    const readable = sourcePages.filter(p => p.html).length;
+    const offers = results.reduce((n, r) => n + (Array.isArray(r.offers) ? r.offers.filter((o: Record<string, unknown>) => o.marketplace === source).length : 0), 0);
+    return [source, { readablePages: readable, totalPages: sourcePages.length, offersFound: offers, status: offers ? "offers_found" : readable ? "no_matching_offers" : "unavailable" }];
+  }));
+  return response({ok:foundCount > 0, status:foundCount === results.length ? "offers_found" : foundCount > 0 ? "partial_results" : "no_offers_found", updatedAt:new Date().toISOString(),itemCount:results.length,itemsWithOffers:foundCount,sourceStatus,results,note:"Сканер извлекает лоты из HTML-карточек и JSON-LD. Если площадка блокирует запросы или загружает выдачу только JavaScript-ом, результат явно отмечается как недоступный/без найденных лотов; нулевой результат не считается подтверждением отсутствия товара."});
 });
