@@ -1,6 +1,6 @@
 # Price Watch — GitHub Pages + Supabase + StarPets MM2
 
-The frontend is a static `index.html` for GitHub Pages. StarPets data is fetched through a Supabase Edge Function, so the browser does not need a local Python server and GitHub Pages does not try to proxy `/api/starpets`.
+The frontend is a static `index.html` for GitHub Pages. StarPets data is fetched through the existing Supabase Edge Function `starpets-sync`; public marketplace scanning uses the separate `marketplace-scan` function. The existing `starpets-sync` function must not be replaced.
 
 ## 1. Set up the Supabase cache table (once)
 
@@ -39,3 +39,27 @@ To test from a terminal, send a GET request with your project publishable key in
 - Prices are treated as RUB and remain separate from the existing manual price estimates.
 - Item matching is based on normalized names and Chroma variants, so check matches for similarly named items.
 - The SQL migration is intentionally not run automatically by GitHub Actions. Run it once in Supabase SQL Editor before testing the function.
+
+
+## Currency and marketplace images
+
+- All catalog price fields are shown in Russian rubles (₽).
+- StarPets source prices are USD, so the frontend converts them to RUB using the public USD/RUB exchange-rate endpoint. If the exchange rate cannot be loaded, the StarPets price is shown as unavailable rather than displayed in dollars or converted using a made-up rate.
+- Item images are centered in their cards. The frontend prefers the image returned by StarPets and may use an image returned with a marketplace listing as a fallback.
+- The marketplace scanner shows only public listings that its HTML parser can actually extract. A health-check response proves the function is responding, not that every listing was found. Dynamic pages, anti-bot responses, pagination, and site changes can cause missed listings.
+
+## Deploy marketplace-scan
+
+The function's source should be kept at `supabase/functions/marketplace-scan/index.ts`. `supabase/config.toml` now includes `verify_jwt = false` for this function while preserving the existing `starpets-sync` configuration. Deploy only `marketplace-scan`; do not overwrite `starpets-sync`.
+
+With Supabase CLI installed and linked to this project, deploy:
+
+```sh
+supabase functions deploy marketplace-scan --no-verify-jwt
+```
+
+Then test the GET health endpoint:
+
+`https://jmahfpaxurmsamxbtvzj.supabase.co/functions/v1/marketplace-scan`
+
+For an actual scan, send a POST request with JSON such as `{"items":["Gingerscope"]}`. A successful health check alone does not verify listing extraction.
