@@ -126,19 +126,16 @@ Deno.serve(async (req: Request) => {
       catch(e) { pages.push({source:source.name as Source,url,html:null,error:e instanceof Error?e.message:String(e)}); }
     }
   }
-  // These sources currently have public category pages only for MM2; don't misrepresent them as universal.
-  const hasMM2=items.some(n=>/gingerscope|harvester|godly|chroma|mm2|murder mystery/i.test(n));
-  if (hasMM2) {
-    try { pages.push({source:"FunPay",url:FUNPAY_MM2,html:await getHtml(FUNPAY_MM2),error:null}); }
-    catch(e) { pages.push({source:"FunPay",url:FUNPAY_MM2,html:null,error:e instanceof Error?e.message:String(e)}); }
-    const sv=await Promise.all(STARVELL_CATEGORIES.map(async url=>{try{return {source:"Starvell" as Source,url,html:await getHtml(url),error:null};}catch(e){return {source:"Starvell" as Source,url,html:null,error:e instanceof Error?e.message:String(e)};}}));
-    pages.push(...sv);
-  }
+  // Public category pages for MM2 sources are also checked; matching is still by item name.
+  try { pages.push({source:"FunPay",url:FUNPAY_MM2,html:await getHtml(FUNPAY_MM2),error:null}); }
+  catch(e) { pages.push({source:"FunPay",url:FUNPAY_MM2,html:null,error:e instanceof Error?e.message:String(e)}); }
+  const sv=await Promise.all(STARVELL_CATEGORIES.map(async url=>{try{return {source:"Starvell" as Source,url,html:await getHtml(url),error:null};}catch(e){return {source:"Starvell" as Source,url,html:null,error:e instanceof Error?e.message:String(e)};}}));
+  pages.push(...sv);
   const results: Array<Record<string,unknown>>=[];
   for(let i=0;i<items.length;i+=3){
     const batch=items.slice(i,i+3);
     results.push(...await Promise.all(batch.map(name=>scanOne(name,pages.filter(p=>{
-      if(p.source==="FunPay"||p.source==="Starvell") return /gingerscope|harvester|godly|chroma|mm2|murder mystery/i.test(name);
+      if(p.source==="FunPay"||p.source==="Starvell") return true;
       return p.url===SOURCES.find(s=>s.name===p.source)?.url(name);
     }))));
   }
