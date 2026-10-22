@@ -154,7 +154,15 @@ async function scanBatch(names:string[]):Promise<ScanResult[]>{
         pageDebug.push({category:String(cat.name??""),slug,payload:payloadSummary(page)});
       }
       sourceOffers.Starvell=names.flatMap(name=>pages.flatMap(page=>toOffers(page,"Starvell",name)));
-      sourceErrors.Starvell.push("diagnostic="+JSON.stringify({stage:"offers",game:String(g.name??"Roblox"),gameSlug:String(g.game_slug??g.slug??""),categoryCount:categories.length,matchedCategories:mm2.length,categories:categoryDebug,requestedPages:pageDebug,matchedPerItem:Object.fromEntries(names.map(name=>[name,pages.flatMap(page=>toOffers(page,"Starvell",name)).length]))}).slice(0,3500));
+      sourceErrors.Starvell.push("diagnostic="+JSON.stringify({
+        stage:"offers",
+        game:String(g.name??"Roblox"),
+        gameSlug:String(g.game_slug??g.slug??""),
+        categoryCount:categories.length,
+        matchedCategories:mm2.map((c:unknown)=>({name:String(asObj(c).name??""),slug:String(asObj(c).category_slug??asObj(c).slug??""),id:asObj(c).category_id??null})),
+        requestedPages:pageDebug.map(p=>({category:p.category,slug:p.slug,payload:p.payload})),
+        matchedPerItem:Object.fromEntries(names.map(name=>[name,pages.flatMap(page=>toOffers(page,"Starvell",name)).length]))
+      }).slice(0,3500));
     }catch(e){sourceErrors.Starvell.push(e instanceof Error?e.message:String(e));}})(),
     (async()=>{try{
       const raw=await providerGet("PlayerOK","search_games",{query:"Roblox",limit:10});
