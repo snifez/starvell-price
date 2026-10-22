@@ -13,8 +13,12 @@ These marketplace wrappers are third-party APIs, not official APIs from the mark
 
 ## Scope and limitations
 
-- Current structured adapters: FunPay, Starvell and PlayerOK.
-- PlayerOK, Plati.market, GGSEL and Tradly are intentionally not shown as active adapters until a reliable, free and documented structured endpoint can be confirmed. No HTML fallback is used.
+- Active adapters: FunPay, Starvell and PlayerOK (via Parse, MM2/Roblox categories only) and Plati.market (public JSON search `plati.io/api/search.ashx`, no key, any game; unofficial, so its format may change).
+- GGSEL and Tradly are shown as «не подключён»: no public search API for third-party apps was confirmed. No HTML fallback is used.
+- Errors 429/500/502/503/504 and timeouts are retried up to 3 times with backoff. If a source still fails, it is reported as `unavailable` with its HTTP code, never as «no lots».
+- `no_matching_offers` means «N lots were scanned, none matched». It is not proof that no lot exists.
+- Request body: `{items:[...≤6], context:"mm2"|"generic"}`. For `generic` only Plati is queried, the other sources are `skipped`.
+- Gingerscope quotes below 26 000 ₽ are discarded on the server and in the UI.
 - A source may return no matching offers or become unavailable. The scanner reports this rather than inventing a price.
 - Shared prices are updated only when at least one real, valid RUB offer is found. Existing shared prices are not overwritten by empty results.
 - The free API quota is limited. Avoid repeatedly running a full-catalog scan; prefer selected-item scans and refresh only what is needed.

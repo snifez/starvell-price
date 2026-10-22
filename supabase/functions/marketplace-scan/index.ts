@@ -5,9 +5,14 @@ const cors = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Max-Age": "86400",
 };
-type Source = "FunPay" | "Starvell" | "PlayerOK";
+type Source = "FunPay" | "Starvell" | "PlayerOK" | "Plati";
 type Offer = { name:string; price:number; currency:"RUB"; marketplace:Source; url:string; image?:string };
-type ScanResult = { name:string; offers:Offer[]; count:number; byMarketplace:Record<string,number>; medianRub:number|null; updatedAt:string; errors:string[] };
+type SrcStatus = "offers_found" | "no_matching_offers" | "unavailable" | "skipped" | "not_connected";
+type Stat = { status:SrcStatus; httpStatus?:number; message?:string; scanned:number; requests:number; retries:number };
+type ItemSrc = { source:string; status:SrcStatus; count:number; httpStatus?:number; message?:string };
+type ScanResult = { name:string; offers:Offer[]; count:number; byMarketplace:Record<string,number>; medianRub:number|null; updatedAt:string; errors:string[]; sources:ItemSrc[] };
+const PLATI_SEARCH = "https://plati.io/api/search.ashx";
+const GINGERSCOPE_FLOOR_RUB = 26000;
 const PROVIDERS = {
   FunPay: "https://api.parse.bot/scraper/b07b6749-5fbe-4b92-ac50-82aab4087ce5",
   Starvell: "https://api.parse.bot/scraper/ab8a5cd8-8fbf-4c5f-8c27-05206d5db84b",
@@ -25,20 +30,40 @@ function matches(title:string,wanted:string){
 function median(values:number[]){const a=[...values].sort((x,y)=>x-y);if(!a.length)return null;const m=Math.floor(a.length/2);return a.length%2?a[m]:Math.round((a[m-1]+a[m])/2*100)/100;}
 function asObj(x:unknown):Record<string,any>{return x&&typeof x==="object"?x as Record<string,any>:{}}
 function dataOf(x:unknown):Record<string,any>{const o=asObj(x);return asObj(o.data??o.result??o)}
-async function providerGet(source:Source,endpoint:string,params:Record<string,string|number>={}){
+class SourceError extends Error{status?:number;attempts:number;constructor(m:string,status:number|undefined,attempts:number){super(m);this.status=status;this.attempts=attempts}}
+const sleep=(ms:number)=>new Promise(r=>setTimeout(r,ms));
+const RETRY=new Set([429,500,502,503,504]);
+// Retries transient failures (429/5xx/timeouts) with backoff; 4xx other than 429 fail immediately.
+async function fetchRetry(label:string,url:URL|string,init:RequestInit,stat:Stat,tries=3):Promise<string>{
+  let last:SourceError|null=null;
+  for(let i=1;i<=tries;i++){
+    stat.requests++;
+    try{
+      const res=await fetch(url,{...init,signal:AbortSignal.timeout(15000)});
+      const raw=await res.text();
+      if(res.ok)return raw;
+      const hint=res.status===502||res.status===503?" (источник временно недоступен)":res.status===429?" (лимит запросов)":"";
+      last=new SourceError(label+": HTTP "+res.status+hint+": "+raw.slice(0,160).replace(/\s+/g," "),res.status,i);
+      if(!RETRY.has(res.status))throw last;
+    }catch(e){
+      if(e instanceof SourceError&&!RETRY.has(e.status??0))throw e;
+      if(!(e instanceof SourceError))last=new SourceError(label+": сеть или таймаут: "+(e instanceof Error?e.message:String(e)),undefined,i);
+    }
+    if(i<tries){stat.retries++;await sleep(500*i*i+Math.floor(Math.random()*250))}
+  }
+  throw last!;
+}
+async function providerGet(source:Exclude<Source,"Plati">,endpoint:string,params:Record<string,string|number>,stat:Stat){
   const key=Deno.env.get("PARSE_API_KEY");
-  if(!key)throw new Error("Не задан секрет PARSE_API_KEY в Supabase");
+  if(!key)throw new SourceError(source+": не задан секрет PARSE_API_KEY в Supabase",undefined,0);
   const url=new URL(PROVIDERS[source]+"/"+endpoint);
   for(const [k,v] of Object.entries(params))url.searchParams.set(k,String(v));
-  const res=await fetch(url,{headers:{"X-API-Key":key,"Accept":"application/json"},signal:AbortSignal.timeout(18000)});
-  const raw=await res.text();
-  // Preserve the provider's diagnostic message (422 validation errors, 502/503 upstream failures)
-  // so a scan response tells us what failed without exposing request headers or API keys.
-  if(!res.ok)throw new Error(source+": API HTTP "+res.status+": "+raw.slice(0,500));
-  let json:unknown;try{json=JSON.parse(raw)}catch{throw new Error(source+": API вернул не JSON (HTTP "+res.status+")");}
-  const root=asObj(json);if(root.status==="error"||root.error)throw new Error(source+": "+String(root.error||root.message||"ошибка API"));
+  const raw=await fetchRetry(source,url,{headers:{"X-API-Key":key,"Accept":"application/json"}},stat);
+  let json:unknown;try{json=JSON.parse(raw)}catch{throw new SourceError(source+": API вернул не JSON",undefined,1)}
+  const root=asObj(json);if(root.status==="error"||root.error)throw new SourceError(source+": "+String(root.error||root.message||"ошибка API"),undefined,1);
   return json;
 }
+function rowCount(raw:unknown){const r=dataOf(raw);let n=0;for(const k of ["offers","listings","lots","products","items"])if(Array.isArray(r[k]))n=Math.max(n,(r[k] as unknown[]).length);return n}
 function payloadSummary(raw:unknown){
   const root=dataOf(raw);
   const arrays:Record<string,number>={};
@@ -88,7 +113,7 @@ function toOffers(raw:unknown,source:Source,wanted:string):Offer[]{
     const currency=String(o.currency??o.price_currency??asObj(rawPrice).currency??"RUB").toUpperCase();
     if(currency!=="RUB"||!Number.isFinite(price)||price<=0||price>=1e8)continue;
     // Reject Gingerscope quotes below the user-confirmed market floor.
-    if(/gingerscope/i.test(wanted)&&price<26000)continue;
+    if(/gingerscope/i.test(wanted)&&price<GINGERSCOPE_FLOOR_RUB)continue;
     let url=String(o.offer_url??o.public_url??o.url??o.link??"");
     if(!/^https:\/\//i.test(url)){
       const id=String(o.offer_id??o.id??o.slug??"");
@@ -103,115 +128,114 @@ function toOffers(raw:unknown,source:Source,wanted:string):Offer[]{
   const seen=new Set<string>();
   return out.filter(o=>{const k=o.marketplace+"|"+o.url+"|"+o.price;if(seen.has(k))return false;seen.add(k);return true;});
 }
-async function scanFunPay(name:string):Promise<Offer[]>{
-  // Lot 925 is the project's existing public FunPay MM2 category. The API filters by listing text.
-  const raw=await providerGet("FunPay","get_lots_by_category",{lot_id:925,query:name});
-  return toOffers(raw,"FunPay",name);
-}
-async function scanStarvell(name:string):Promise<Offer[]>{
-  // Resolve Roblox categories via structured API, then query the relevant MM2 category offers.
-  const raw=await providerGet("Starvell","search_games",{keyword:"Roblox"});
-  const root=dataOf(raw), games=Array.isArray(root.games)?root.games:[];
-  const roblox=games.find((g:unknown)=>/roblox/i.test(String(asObj(g).name??asObj(g).game_slug??"")));
-  if(!roblox)throw new Error("Starvell: API не вернул каталог Roblox");
-  const game=asObj(roblox), categories=Array.isArray(game.categories)?game.categories:[];
-  const mm2=categories.filter((c:unknown)=>/mm2|murder mystery|murder-mystery/i.test(String(asObj(c).name??"")+" "+String(asObj(c).category_slug??"")));
-  if(!mm2.length)throw new Error("Starvell: в API не найдена категория MM2 для Roblox");
-  const results:Offer[]=[];
-  // Keep within the free provider quota; scan only a few explicitly relevant categories per item.
-  for(const catValue of mm2.slice(0,4)){
-    const cat=asObj(catValue),slug=String(cat.category_slug??"");
-    if(!slug)continue;
-    const offers=await providerGet("Starvell","list_offers",{game_slug:String(game.game_slug??"roblox"),category_slug:slug,offset:0,limit:150});
-    results.push(...toOffers(offers,"Starvell",name));
+function findRows(x:unknown,depth=0):Record<string,any>[]{
+  if(depth>5||x==null||typeof x!=="object")return [];
+  if(Array.isArray(x)){
+    const objs=x.filter(v=>v&&typeof v==="object"&&!Array.isArray(v)) as Record<string,any>[];
+    if(objs.some(o=>o.price_rur!==undefined||o.price!==undefined))return objs;
+    return x.flatMap(v=>findRows(v,depth+1));
   }
-  return results;
+  const o=x as Record<string,any>;
+  if(o.price_rur!==undefined&&(o.name!==undefined||o.title!==undefined))return [o];
+  return Object.values(o).flatMap(v=>findRows(v,depth+1));
 }
-async function scanPlayerOK(name:string):Promise<Offer[]>{
-  const raw=await providerGet("PlayerOK","search_games",{query:"Roblox",limit:10});
-  const root=dataOf(raw), games=Array.isArray(root.games)?root.games:[];
-  const game=games.find((g:unknown)=>/roblox/i.test(String(asObj(g).name??asObj(g).slug??"")));
-  if(!game)throw new Error("PlayerOK: API не вернул игру Roblox");
-  const g=asObj(game), categories=Array.isArray(g.categories)?g.categories:[];
-  const relevant=categories.filter((v:unknown)=>/mm2|murder mystery|предмет|items|item/i.test(String(asObj(v).name??"")+" "+String(asObj(v).slug??"")));
-  const chosen=relevant.slice(0,2);
-  const queries=chosen.length?chosen:[null];
-  const pages=await Promise.all(queries.map(async (cat:Record<string,any>|null)=>{
-    const params:Record<string,string|number>={game_slug:String(g.slug??"roblox"),limit:50,sort_field:"price",sort_direction:"ASC"};
-    if(cat?.slug)params.category_slug=String(cat.slug);
-    return await providerGet("PlayerOK","list_items",params);
-  }));
-  return pages.flatMap(page=>toOffers(page,"PlayerOK",name));
+// Plati.market public JSON search (plati.io/api/search.ashx): unofficial but unauthenticated, no HTML parsing.
+async function scanPlati(name:string,mm2:boolean,stat:Stat):Promise<Offer[]>{
+  const url=new URL(PLATI_SEARCH);
+  url.searchParams.set("query",mm2?name+" MM2":name);url.searchParams.set("pagesize","50");url.searchParams.set("visibleOnly","true");url.searchParams.set("response","json");
+  const raw=await fetchRetry("Plati",url,{headers:{"Accept":"application/json"}},stat);
+  let json:unknown;try{json=JSON.parse(raw)}catch{throw new SourceError("Plati: ответ не JSON",undefined,1)}
+  const rows=findRows(json);stat.scanned+=rows.length;
+  const out:Offer[]=[];
+  for(const o of rows){
+    const title=String(o.name??o.title??"").trim(),price=numericPrice(o.price_rur??o.price);
+    const link=String(o.url??"");
+    if(!title||blocked(title)||!matches(title,name)||!Number.isFinite(price)||price<=0||price>=1e8||!/^https:\/\//i.test(link))continue;
+    if(/gingerscope/i.test(name)&&price<GINGERSCOPE_FLOOR_RUB)continue;
+    out.push({name:title,price,currency:"RUB",marketplace:"Plati",url:link});
+  }
+  return out;
 }
-async function scanBatch(names:string[]):Promise<ScanResult[]>{
-  // Fetch each marketplace/category once per batch instead of repeating identical catalog
-  // requests for every item. This reduces API usage significantly for the same batch.
-  const sourceOffers:Record<Source,Offer[]>={FunPay:[],Starvell:[],PlayerOK:[]};
-  const sourceErrors:Record<Source,string[]>={FunPay:[],Starvell:[],PlayerOK:[]};
-  await Promise.all([
-    (async()=>{try{
-      const raw=await providerGet("FunPay","get_lots_by_category",{lot_id:925});
-      sourceOffers.FunPay=names.flatMap(name=>toOffers(raw,"FunPay",name));
-    }catch(e){sourceErrors.FunPay.push(e instanceof Error?e.message:String(e));}})(),
-    (async()=>{try{
-      const rawCatalog=await providerGet("Starvell","search_games",{keyword:"Roblox"});
-      const root=dataOf(rawCatalog),games=Array.isArray(root.games)?root.games:[];
+const newStat=():Stat=>({status:"no_matching_offers",scanned:0,requests:0,retries:0});
+async function scanBatch(names:string[],mm2:boolean){
+  const stats:Record<string,Stat>={FunPay:newStat(),Starvell:newStat(),PlayerOK:newStat(),Plati:newStat()};
+  const offers:Record<Source,Offer[]>={FunPay:[],Starvell:[],PlayerOK:[],Plati:[]};
+  const fail=(src:Source,e:unknown)=>{const st=stats[src];st.status="unavailable";st.httpStatus=e instanceof SourceError?e.status:undefined;st.message=e instanceof Error?e.message:String(e)};
+  const tasks:Promise<void>[]=[];
+  if(mm2){
+    tasks.push((async()=>{try{
+      const raw=await providerGet("FunPay","get_lots_by_category",{lot_id:925},stats.FunPay);
+      stats.FunPay.scanned+=rowCount(raw);
+      offers.FunPay=names.flatMap(n=>toOffers(raw,"FunPay",n));
+    }catch(e){fail("FunPay",e)}})());
+    tasks.push((async()=>{try{
+      const st=stats.Starvell;
+      const rawCatalog=await providerGet("Starvell","search_games",{keyword:"Roblox"},st);
+      const games=Array.isArray(dataOf(rawCatalog).games)?dataOf(rawCatalog).games:[];
       const game=games.find((g:unknown)=>/roblox/i.test(String(asObj(g).name??asObj(g).game_slug??asObj(g).slug??"")));
-      if(!game){
-        sourceErrors.Starvell.push("diagnostic="+JSON.stringify({stage:"search_games",catalog:payloadSummary(rawCatalog)}).slice(0,1400));
-        throw new Error("API не вернул каталог Roblox");
-      }
-      const g=asObj(game),categories=Array.isArray(g.categories)?g.categories:[];
-      const categoryDebug=categories.map((c:unknown)=>({name:String(asObj(c).name??""),slug:String(asObj(c).category_slug??asObj(c).slug??""),keys:Object.keys(asObj(c)).slice(0,12)})).slice(0,40);
-      const mm2=categories.filter((c:unknown)=>/mm2|murder mystery|murder-mystery/i.test(String(asObj(c).name??"")+" "+String(asObj(c).category_slug??asObj(c).slug??"")));
-      // Some Starvell API versions don't label the MM2 category explicitly. In that case,
-      // search Roblox item/knife categories rather than silently skipping Starvell entirely.
-      const relevant=mm2.length?mm2:categories.filter((c:unknown)=>/item|предмет|knife|knives|weapon|оруж|godly|ancient/i.test(String(asObj(c).name??"")+" "+String(asObj(c).category_slug??asObj(c).slug??"")));
-      if(!relevant.length){
-        sourceErrors.Starvell.push("diagnostic="+JSON.stringify({stage:"categories",gameKeys:Object.keys(g).slice(0,25),gameName:String(g.name??""),gameSlug:String(g.game_slug??g.slug??""),categoryCount:categories.length,categories:categoryDebug}).slice(0,1800));
-        throw new Error("не найдены категории MM2 или Roblox items для поиска");
-      }
-      const pages=[];
-      const pageDebug=[];
-      for(const cv of relevant.slice(0,6)){
+      if(!game)throw new SourceError("Starvell: каталог Roblox не получен",undefined,1);
+      const g=asObj(game),cats=Array.isArray(g.categories)?g.categories:[];
+      const label=(c:unknown)=>String(asObj(c).name??"")+" "+String(asObj(c).category_slug??asObj(c).slug??"");
+      const mm2c=cats.filter((c:unknown)=>/mm2|murder mystery|murder-mystery/i.test(label(c)));
+      const rel=mm2c.length?mm2c:cats.filter((c:unknown)=>/item|предмет|knife|knives|weapon|оруж|godly|ancient/i.test(label(c)));
+      if(!rel.length)throw new SourceError("Starvell: не найдены категории MM2/Roblox items",undefined,1);
+      const pages:unknown[]=[];
+      for(const cv of rel.slice(0,6)){
         const cat=asObj(cv),slug=String(cat.category_slug??cat.slug??"");if(!slug)continue;
-        // Walk multiple pages so rare items such as Gingerscope aren't missed after the first 150 offers.
         for(const offset of [0,150,300]){
-          const page=await providerGet("Starvell","list_offers",{game_slug:String(g.game_slug??g.slug??"roblox"),category_slug:slug,offset,limit:150});
-          pages.push(page);
-          pageDebug.push({category:String(cat.name??""),slug,offset,payload:payloadSummary(page)});
-          const pageRoot=dataOf(page);
-          const listed=["offers","listings","lots","products","items"].map(k=>Array.isArray(pageRoot[k])?pageRoot[k].length:0).reduce((a,b)=>Math.max(a,b),0);
-          if(listed<150)break;
+          const page=await providerGet("Starvell","list_offers",{game_slug:String(g.game_slug??g.slug??"roblox"),category_slug:slug,offset,limit:150},st);
+          pages.push(page);const n=rowCount(page);st.scanned+=n;if(n<150)break;
         }
       }
-      sourceOffers.Starvell=names.flatMap(name=>pages.flatMap(page=>toOffers(page,"Starvell",name)));
-      // Successful diagnostics must not be recorded as source errors; otherwise the API
-      // incorrectly reports Starvell as unavailable despite receiving offer pages.
-    }catch(e){sourceErrors.Starvell.push(e instanceof Error?e.message:String(e));}})(),
-    (async()=>{try{
-      const raw=await providerGet("PlayerOK","search_games",{query:"Roblox",limit:10});
-      const root=dataOf(raw),games=Array.isArray(root.games)?root.games:[];
+      offers.Starvell=names.flatMap(n=>pages.flatMap(p=>toOffers(p,"Starvell",n)));
+    }catch(e){fail("Starvell",e)}})());
+    tasks.push((async()=>{try{
+      const st=stats.PlayerOK;
+      const raw=await providerGet("PlayerOK","search_games",{query:"Roblox",limit:10},st);
+      const games=Array.isArray(dataOf(raw).games)?dataOf(raw).games:[];
       const game=games.find((g:unknown)=>/roblox/i.test(String(asObj(g).name??asObj(g).slug??"")));
-      if(!game)throw new Error("API не вернул игру Roblox");
-      const g=asObj(game),categories=Array.isArray(g.categories)?g.categories:[];
-      const relevant=categories.filter((v:unknown)=>/mm2|murder mystery|предмет|items|item/i.test(String(asObj(v).name??"")+" "+String(asObj(v).slug??"")));
-      const chosen=relevant.slice(0,2),queries=chosen.length?chosen:[null],pages=[];
+      if(!game)throw new SourceError("PlayerOK: игра Roblox не найдена",undefined,1);
+      const g=asObj(game),cats=Array.isArray(g.categories)?g.categories:[];
+      const rel=cats.filter((v:unknown)=>/mm2|murder mystery|предмет|items|item/i.test(String(asObj(v).name??"")+" "+String(asObj(v).slug??"")));
+      const queries=(rel.length?rel.slice(0,2):[null]) as (Record<string,any>|null)[];
+      const pages:unknown[]=[];
       for(const cat of queries){
         const params:Record<string,string|number>={game_slug:String(g.slug??"roblox"),limit:50,sort_field:"price",sort_direction:"ASC"};
         if(cat?.slug)params.category_slug=String(cat.slug);
-        pages.push(await providerGet("PlayerOK","list_items",params));
+        const page=await providerGet("PlayerOK","list_items",params,st);pages.push(page);st.scanned+=rowCount(page);
       }
-      sourceOffers.PlayerOK=names.flatMap(name=>pages.flatMap(page=>toOffers(page,"PlayerOK",name)));
-    }catch(e){sourceErrors.PlayerOK.push(e instanceof Error?e.message:String(e));}})()
-  ]);
-  return names.map(name=>{
-    const all=[...sourceOffers.FunPay,...sourceOffers.Starvell,...sourceOffers.PlayerOK];
-    const offers=all.filter(o=>matches(o.name,name))
-      .filter((o,i,a)=>a.findIndex(x=>x.marketplace===o.marketplace&&x.url===o.url&&x.price===o.price)===i);
-    const errors=(["FunPay","Starvell","PlayerOK"] as Source[]).flatMap(source=>sourceErrors[source].map(e=>source+": "+e));
-    return {name,offers,count:offers.length,byMarketplace:{FunPay:offers.filter(o=>o.marketplace==="FunPay").length,Starvell:offers.filter(o=>o.marketplace==="Starvell").length,PlayerOK:offers.filter(o=>o.marketplace==="PlayerOK").length},medianRub:median(offers.map(o=>o.price)),updatedAt:new Date().toISOString(),errors};
+      offers.PlayerOK=names.flatMap(n=>pages.flatMap(p=>toOffers(p,"PlayerOK",n)));
+    }catch(e){fail("PlayerOK",e)}})());
+  }else{
+    for(const s of ["FunPay","Starvell","PlayerOK"]){stats[s].status="skipped";stats[s].message="Сканер этой площадки настроен только на категорию MM2; для других игр нужна своя категория."}
+  }
+  tasks.push((async()=>{
+    // Plati is queried per item (generic text search, works for any game); partial failures still count as unavailable.
+    const st=stats.Plati;let okAny=false,lastErr:unknown=null;
+    for(const n of names){try{offers.Plati.push(...await scanPlati(n,mm2,st));okAny=true}catch(e){lastErr=e}}
+    if(!okAny&&lastErr)fail("Plati",lastErr);
+  })());
+  await Promise.all(tasks);
+  for(const src of ["FunPay","Starvell","PlayerOK","Plati"] as Source[]){
+    const st=stats[src];if(st.status==="unavailable"||st.status==="skipped")continue;
+    st.status=offers[src].length?"offers_found":"no_matching_offers";
+    if(!offers[src].length)st.message="Просмотрено лотов: "+st.scanned+". Совпадений нет; это не доказывает отсутствие лотов.";
+  }
+  const updatedAt=new Date().toISOString();
+  const results:ScanResult[]=names.map(name=>{
+    const all=[...offers.FunPay,...offers.Starvell,...offers.PlayerOK,...offers.Plati];
+    const found=all.filter(o=>matches(o.name,name)).filter((o,i,a)=>a.findIndex(x=>x.marketplace===o.marketplace&&x.url===o.url&&x.price===o.price)===i).sort((a,b)=>a.price-b.price);
+    const by=(m:string)=>found.filter(o=>o.marketplace===m).length;
+    const sources:ItemSrc[]=(["FunPay","Starvell","PlayerOK","Plati"] as Source[]).map(src=>{
+      const st=stats[src],count=by(src);
+      return {source:src,status:st.status==="unavailable"||st.status==="skipped"?st.status:(count?"offers_found":"no_matching_offers"),count,httpStatus:st.httpStatus,message:st.message};
+    });
+    sources.push({source:"GGSEL",status:"not_connected",count:0,message:"Публичного API поиска для сторонних приложений не подтверждено."});
+    sources.push({source:"Tradly",status:"not_connected",count:0,message:"Публичного API поиска игровых лотов не подтверждено."});
+    const errors=sources.filter(x=>x.status==="unavailable").map(x=>x.source+": "+(x.message||"недоступен"));
+    return {name,offers:found,count:found.length,byMarketplace:{FunPay:by("FunPay"),Starvell:by("Starvell"),PlayerOK:by("PlayerOK"),Plati:by("Plati")},medianRub:median(found.map(o=>o.price)),updatedAt,errors,sources};
   });
+  return {results,stats};
 }
 async function dbRequest(path:string,init:RequestInit={}){
   const url=Deno.env.get("SUPABASE_URL"),key=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -238,9 +262,10 @@ async function readShared(){
 }
 Deno.serve(async(req:Request)=>{
   if(req.method==="OPTIONS")return new Response("ok",{headers:cors});
+  const SOURCES=["FunPay API","Starvell API","PlayerOK API","Plati.market search"];
   if(req.method==="GET"){
-    try{return corsResponse({ok:true,service:"price-watch-api-adapters",sources:["FunPay API","Starvell API","PlayerOK API"],cachedResults:await readShared(),storage:"Supabase shared database"});}
-    catch(e){return corsResponse({ok:false,service:"price-watch-api-adapters",sources:["FunPay API","Starvell API"],cachedResults:[],configurationError:e instanceof Error?e.message:String(e),note:"Для общей базы нужно применить SQL migration; для поиска — добавить PARSE_API_KEY в секреты Supabase."},200);}
+    try{return corsResponse({ok:true,service:"price-watch-api-adapters",sources:SOURCES,notConnected:["GGSEL","Tradly"],cachedResults:await readShared(),storage:"Supabase shared database"});}
+    catch(e){return corsResponse({ok:false,service:"price-watch-api-adapters",sources:SOURCES,cachedResults:[],configurationError:e instanceof Error?e.message:String(e),note:"Для общей базы нужно применить SQL migration; для FunPay/Starvell/PlayerOK добавь PARSE_API_KEY в секреты Supabase."},200);}
   }
   if(req.method!=="POST")return corsResponse({error:"Method not allowed"},405);
   let body:unknown;try{body=await req.json()}catch{return corsResponse({error:"Ожидается JSON"},400)}
@@ -249,10 +274,11 @@ Deno.serve(async(req:Request)=>{
   if(raw.length>6)return corsResponse({error:"За запрос можно проверить максимум 6 предметов, чтобы не исчерпать бесплатную квоту API"},400);
   const items=[...new Set(raw.map(v=>String(v??"").trim()).filter(v=>v.length>1&&v.length<=100&&!blocked(v)))];
   if(!items.length)return corsResponse({error:"Нет корректных названий предметов"},400);
-  const results:ScanResult[]=[];
-  results.push(...await scanBatch(items));
+  const mm2=String(asObj(body).context??"mm2").toLowerCase()==="mm2";
+  const {results,stats}=await scanBatch(items,mm2);
   let persistence:{ok:boolean;savedItems?:number;error?:string}={ok:true,savedItems:0};
   try{persistence.savedItems=await saveShared(results)}catch(e){persistence={ok:false,error:e instanceof Error?e.message:String(e)}}
   const withOffers=results.filter(r=>r.count>0).length;
-  return corsResponse({ok:true,status:withOffers===results.length?"offers_found":withOffers?"partial_results":"no_offers_found",updatedAt:new Date().toISOString(),itemCount:results.length,itemsWithOffers:withOffers,persistence,sourceStatus:["FunPay","Starvell","PlayerOK"].map(source=>({source,status:results.some(r=>r.byMarketplace[source]>0)?"offers_found":results.every(r=>r.errors.some(e=>e.startsWith(source+":")) )?"unavailable":"no_matching_offers"})),results,note:"Каждый источник запрашивается один раз на партию (с отдельными запросами к категориям), затем предложения сопоставляются локально. Сканирование сейчас покрывает MM2/Roblox; остальные игры требуют собственных категорий источников. Цены берутся только из API-ответов."});
+  const sourceStatus=[...Object.entries(stats).map(([source,st])=>({source,...st})),{source:"GGSEL",status:"not_connected",scanned:0,requests:0,retries:0,message:"Публичного API поиска не подтверждено."},{source:"Tradly",status:"not_connected",scanned:0,requests:0,retries:0,message:"Публичного API поиска не подтверждено."}];
+  return corsResponse({ok:true,status:withOffers===results.length?"offers_found":withOffers?"partial_results":"no_offers_found",updatedAt:new Date().toISOString(),context:mm2?"mm2":"generic",itemCount:results.length,itemsWithOffers:withOffers,persistence,sourceStatus,results,note:"Каждый источник запрашивается один раз на партию; 429/502/503/504 повторяются с паузой. Статус «нет совпадений» не доказывает отсутствие лотов. Цены берутся только из ответов источников."});
 });
