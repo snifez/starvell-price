@@ -66,29 +66,29 @@ function anchors(html: string, base: string, source: "FunPay" | "PlayerOK", want
   // FunPay's public category cards are normally <a class="tc-item" href="/lots/offer?id=...">.
   // Read each card as a unit; searching a broad surrounding window can accidentally associate
   // another seller's title or price with the wrong offer.
-  const re = /<a\\b([^>]*\\bhref\\s*=\\s*(["'])(.*?)\\2[^>]*)>([\\s\\S]*?)<\\/a>/gi;
+  const re = /<a\b([^>]*\bhref\s*=\s*(["'])(.*?)\2[^>]*)>([\s\S]*?)<\/a>/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) && out.length < 1500) {
     const attrs = m[1], rawUrl = m[3], body = m[4];
     let url = "";
     try { url = new URL(rawUrl, base).href; } catch { continue; }
-    if (source === "FunPay" ? !/funpay\\.com\\/lots\\/offer\\?id=\\d+/i.test(url) : !/playerok\\.com\\/products\\//i.test(url)) continue;
-    const titleAttr = attrs.match(/\\b(?:title|aria-label)\\s*=\\s*(["'])(.*?)\\1/i)?.[2] || "";
+    if (source === "FunPay" ? !/funpay\.com\/lots\/offer\?id=\d+/i.test(url) : !/playerok\.com\/products\//i.test(url)) continue;
+    const titleAttr = attrs.match(/\b(?:title|aria-label)\s*=\s*(["'])(.*?)\1/i)?.[2] || "";
     const bodyText = text(body);
-    const imgAlt = body.match(/<img\\b[^>]*\\balt\\s*=\\s*(["'])(.*?)\\1/i)?.[2] || "";
-    const cardTitle = body.match(/<[^>]*class=["'][^"']*tc-desc-text[^"']*["'][^>]*>([\\s\\S]*?)<\\/[^>]+>/i)?.[1] || "";
+    const imgAlt = body.match(/<img\b[^>]*\balt\s*=\s*(["'])(.*?)\1/i)?.[2] || "";
+    const cardTitle = body.match(/<[^>]*class=["'][^"']*tc-desc-text[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i)?.[1] || "";
     const title = text(titleAttr || cardTitle || bodyText || imgAlt).slice(0, 180);
     const searchText = norm([title, imgAlt, bodyText].join(" "));
     if (!nameMatches(searchText, wanted) || blocked(searchText)) continue;
 
     let price: number | null = null;
     if (source === "FunPay") {
-      const priceHtml = body.match(/<[^>]*class=["'][^"']*tc-price[^"']*["'][^>]*>([\\s\\S]*?)<\\/[^>]+>/i)?.[0] || "";
+      const priceHtml = body.match(/<[^>]*class=["'][^"']*tc-price[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i)?.[0] || "";
       const priceText = text(priceHtml);
       // Do not interpret a bare data-s number as RUB unless the visible card explicitly says RUB.
-      const visibleRub = /(?:₽|руб(?:лей|ля|ль)?\\.?|RUB)/i.test(priceText);
+      const visibleRub = /(?:₽|руб(?:лей|ля|ль)?\.?|RUB)/i.test(priceText);
       if (visibleRub) {
-        const dataS = priceHtml.match(/\\bdata-s\\s*=\\s*(["'])([\\d.,]+)\\1/i)?.[2];
+        const dataS = priceHtml.match(/\bdata-s\s*=\s*(["'])([\d.,]+)\1/i)?.[2];
         const numeric = dataS ? Number(dataS.replace(",", ".")) : null;
         price = numeric !== null && Number.isFinite(numeric) && numeric > 0 ? numeric : money(priceText);
       }
@@ -98,7 +98,7 @@ function anchors(html: string, base: string, source: "FunPay" | "PlayerOK", want
     }
     if (price === null || price <= 0) continue;
 
-    const imgMatch = body.match(/<img\\b[^>]*(?:src|data-src|data-original)\\s*=\\s*(["'])(.*?)\\1/i);
+    const imgMatch = body.match(/<img\b[^>]*(?:src|data-src|data-original)\s*=\s*(["'])(.*?)\1/i);
     let image = "";
     try {
       const parsed = new URL(imgMatch?.[2] || "", base);
