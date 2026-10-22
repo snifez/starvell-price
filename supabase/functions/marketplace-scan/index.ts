@@ -52,6 +52,15 @@ function payloadSummary(raw:unknown){
     sampleTitles:rows.slice(0,5).map(v=>String(asObj(v).title??asObj(v).name??asObj(v).description??asObj(v).product_name??"").slice(0,100)),
   };
 }
+function searchableText(value:unknown,depth=0):string{
+  if(depth>4||value==null)return "";
+  if(typeof value==="string"||typeof value==="number")return String(value);
+  if(Array.isArray(value))return value.map(v=>searchableText(v,depth+1)).join(" ");
+  if(typeof value==="object")return Object.entries(value as Record<string,unknown>)
+    .filter(([k])=>!["seller","seller_id","offer_id","id","url","offer_url","price","currency"].includes(k.toLowerCase()))
+    .map(([k,v])=>k+" "+searchableText(v,depth+1)).join(" ");
+  return "";
+}
 function toOffers(raw:unknown,source:Source,wanted:string):Offer[]{
   const root=dataOf(raw);
   const candidates:unknown[]=[];
@@ -60,7 +69,8 @@ function toOffers(raw:unknown,source:Source,wanted:string):Offer[]{
   for(const value of candidates){
     const o=asObj(value),seller=asObj(o.seller);
     const title=String(o.title??o.name??o.description??o.brief_description??o.product_name??"").trim();
-    if(!title||blocked(title)||!matches(title,wanted))continue;
+    const searchable=[title,o.brief_description,o.description,o.attributes,o.subcategory,o.category].map(v=>searchableText(v)).join(" ");
+    if(!title||blocked(title)||blocked(searchable)||!matches(searchable,wanted))continue;
     const rawPrice=o.price??o.price_raw??o.priceRaw??o.raw_price;
     const price=typeof rawPrice==="number"?rawPrice:Number(String(rawPrice??"").replace(/\s/g,"").replace(",","."));
     const currency=String(o.currency??o.price_currency??"RUB").toUpperCase();
@@ -130,7 +140,6 @@ async function scanBatch(names:string[]):Promise<ScanResult[]>{
       sourceOffers.FunPay=names.flatMap(name=>toOffers(raw,"FunPay",name));
     }catch(e){sourceErrors.FunPay.push(e instanceof Error?e.message:String(e));}})(),
     (async()=>{try{
-      const raw=await providerGet("Starvell","search_games",{keyword:"Roblox"});
       const rawCatalog=await providerGet("Starvell","search_games",{keyword:"Roblox"});
       const root=dataOf(rawCatalog),games=Array.isArray(root.games)?root.games:[];
       const game=games.find((g:unknown)=>/roblox/i.test(String(asObj(g).name??asObj(g).game_slug??asObj(g).slug??"")));
@@ -154,15 +163,8 @@ async function scanBatch(names:string[]):Promise<ScanResult[]>{
         pageDebug.push({category:String(cat.name??""),slug,payload:payloadSummary(page)});
       }
       sourceOffers.Starvell=names.flatMap(name=>pages.flatMap(page=>toOffers(page,"Starvell",name)));
-      sourceErrors.Starvell.push("diagnostic="+JSON.stringify({
-        stage:"offers",
-        game:String(g.name??"Roblox"),
-        gameSlug:String(g.game_slug??g.slug??""),
-        categoryCount:categories.length,
-        matchedCategories:mm2.map((c:unknown)=>({name:String(asObj(c).name??""),slug:String(asObj(c).category_slug??asObj(c).slug??""),id:asObj(c).category_id??null})),
-        requestedPages:pageDebug.map(p=>({category:p.category,slug:p.slug,payload:p.payload})),
-        matchedPerItem:Object.fromEntries(names.map(name=>[name,pages.flatMap(page=>toOffers(page,"Starvell",name)).length]))
-      }).slice(0,3500));
+      // Successful diagnostics must not be recorded as source errors; otherwise the API
+      // incorrectly reports Starvell as unavailable despite receiving offer pages.
     }catch(e){sourceErrors.Starvell.push(e instanceof Error?e.message:String(e));}})(),
     (async()=>{try{
       const raw=await providerGet("PlayerOK","search_games",{query:"Roblox",limit:10});
