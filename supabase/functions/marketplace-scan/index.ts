@@ -114,18 +114,17 @@ Deno.serve(async (req: Request) => {
   let body: unknown; try { body=await req.json(); } catch { return response({error:"Ожидается JSON в теле запроса"},400); }
   const raw=(body as {items?:unknown})?.items;
   if (!Array.isArray(raw)||raw.length<1) return response({error:"Передай массив items, например ['Gingerscope']"},400);
-  if (raw.length>80) return response({error:"За один запрос можно проверить не более 80 предметов"},400);
+  if (raw.length>12) return response({error:"За один запрос можно проверить не более 12 предметов"},400);
   const items=[...new Set(raw.map(x=>String(x??"").trim()).filter(x=>x.length>1&&x.length<=100&&!blocked(x)))];
   if (!items.length) return response({error:"Нет корректных названий предметов после фильтрации"},400);
   const pages: Array<{source:Source;url:string;html:string|null;error:string|null}> = [];
   // Generic game-item sources, searched by name where the site exposes a public search URL.
-  for (const source of SOURCES) {
-    for (const name of items) {
-      const url=source.url(name);
-      try { pages.push({source:source.name as Source,url,html:await getHtml(url),error:null}); }
-      catch(e) { pages.push({source:source.name as Source,url,html:null,error:e instanceof Error?e.message:String(e)}); }
-    }
-  }
+  const searchedPages = await Promise.all(SOURCES.flatMap(source => items.map(async name => {
+    const url = source.url(name);
+    try { return {source:source.name as Source,url,html:await getHtml(url),error:null}; }
+    catch(e) { return {source:source.name as Source,url,html:null,error:e instanceof Error?e.message:String(e)}; }
+  })));
+  pages.push(...searchedPages);
   // Public category pages for MM2 sources are also checked; matching is still by item name.
   try { pages.push({source:"FunPay",url:FUNPAY_MM2,html:await getHtml(FUNPAY_MM2),error:null}); }
   catch(e) { pages.push({source:"FunPay",url:FUNPAY_MM2,html:null,error:e instanceof Error?e.message:String(e)}); }
