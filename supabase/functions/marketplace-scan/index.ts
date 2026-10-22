@@ -73,7 +73,7 @@ async function scanFunPay(name:string):Promise<Offer[]>{
 }
 async function scanStarvell(name:string):Promise<Offer[]>{
   // Resolve Roblox categories via structured API, then query the relevant MM2 category offers.
-  const raw=await providerGet("Starvell","search_games",{query:"Roblox"});
+  const raw=await providerGet("Starvell","search_games",{keyword:"Roblox"});
   const root=dataOf(raw), games=Array.isArray(root.games)?root.games:[];
   const roblox=games.find((g:unknown)=>/roblox/i.test(String(asObj(g).name??asObj(g).game_slug??"")));
   if(!roblox)throw new Error("Starvell: API не вернул каталог Roblox");
@@ -117,7 +117,7 @@ async function scanBatch(names:string[]):Promise<ScanResult[]>{
       sourceOffers.FunPay=names.flatMap(name=>toOffers(raw,"FunPay",name));
     }catch(e){sourceErrors.FunPay.push(e instanceof Error?e.message:String(e));}})(),
     (async()=>{try{
-      const raw=await providerGet("Starvell","search_games",{query:"Roblox"});
+      const raw=await providerGet("Starvell","search_games",{keyword:"Roblox"});
       const root=dataOf(raw),games=Array.isArray(root.games)?root.games:[];
       const game=games.find((g:unknown)=>/roblox/i.test(String(asObj(g).name??asObj(g).game_slug??"")));
       if(!game)throw new Error("API не вернул каталог Roblox");
