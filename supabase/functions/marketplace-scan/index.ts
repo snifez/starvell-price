@@ -31,8 +31,11 @@ async function providerGet(source:Source,endpoint:string,params:Record<string,st
   const url=new URL(PROVIDERS[source]+"/"+endpoint);
   for(const [k,v] of Object.entries(params))url.searchParams.set(k,String(v));
   const res=await fetch(url,{headers:{"X-API-Key":key,"Accept":"application/json"},signal:AbortSignal.timeout(18000)});
-  const raw=await res.text(); let json:unknown;try{json=JSON.parse(raw)}catch{throw new Error(source+": API вернул не JSON (HTTP "+res.status+")")}
-  if(!res.ok)throw new Error(source+": API HTTP "+res.status);
+  const raw=await res.text();
+  // Preserve the provider's diagnostic message (422 validation errors, 502/503 upstream failures)
+  // so a scan response tells us what failed without exposing request headers or API keys.
+  if(!res.ok)throw new Error(source+": API HTTP "+res.status+": "+raw.slice(0,500));
+  let json:unknown;try{json=JSON.parse(raw)}catch{throw new Error(source+": API вернул не JSON (HTTP "+res.status+")");}
   const root=asObj(json);if(root.status==="error"||root.error)throw new Error(source+": "+String(root.error||root.message||"ошибка API"));
   return json;
 }
