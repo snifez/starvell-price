@@ -53,7 +53,8 @@ function toOffers(raw:unknown,source:Source,wanted:string):Offer[]{
     if(!/^https:\/\//i.test(url)){
       const id=String(o.offer_id??o.id??o.slug??"");
       if(source==="FunPay"&&id)url="https://funpay.com/lots/offer?id="+encodeURIComponent(id);
-      else if(source==="Starvell"&&id)url="https://starvell.com/offer/"+encodeURIComponent(id);\n      else if(source==="PlayerOK"&&String(o.slug??""))url="https://playerok.com/products/"+encodeURIComponent(String(o.slug));
+      else if(source==="Starvell"&&id)url="https://starvell.com/offer/"+encodeURIComponent(id);
+      else if(source==="PlayerOK"&&String(o.slug??""))url="https://playerok.com/products/"+encodeURIComponent(String(o.slug));
     }
     if(!/^https:\/\//i.test(url))continue;
     const image=String(o.image??o.image_url??(Array.isArray(o.images)?asObj(o.images[0]).url:"")??"");
@@ -64,7 +65,7 @@ function toOffers(raw:unknown,source:Source,wanted:string):Offer[]{
 }
 async function scanFunPay(name:string):Promise<Offer[]>{
   // Lot 925 is the project's existing public FunPay MM2 category. The API filters by listing text.
-  const raw=await providerGet("FunPay","get_lots_by_category",{lot_id:925,query:name});
+  const raw=await providerGet("FunPay","get_lots_by_category",{category_id:925,query:name});
   return toOffers(raw,"FunPay",name);
 }
 async function scanStarvell(name:string):Promise<Offer[]>{
@@ -104,8 +105,8 @@ async function scanPlayerOK(name:string):Promise<Offer[]>{
 }
 async function scanOne(name:string):Promise<ScanResult>{
   const errors:string[]=[], offers:Offer[]=[];
-  const results=await Promise.allSettled([scanFunPay(name),scanStarvell(name)]);
-  const sources:Source[]=["FunPay","Starvell"];
+  const results=await Promise.allSettled([scanFunPay(name),scanStarvell(name),scanPlayerOK(name)]);
+  const sources:Source[]=["FunPay","Starvell","PlayerOK"];
   results.forEach((r,i)=>{if(r.status==="fulfilled")offers.push(...r.value);else errors.push(sources[i]+": "+(r.reason instanceof Error?r.reason.message:String(r.reason)))});
   const unique=[...new Map(offers.map(o=>[o.marketplace+"|"+o.url+"|"+o.price,o])).values()];
   const prices=unique.map(o=>o.price);
