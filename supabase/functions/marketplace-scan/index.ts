@@ -39,6 +39,19 @@ async function providerGet(source:Source,endpoint:string,params:Record<string,st
   const root=asObj(json);if(root.status==="error"||root.error)throw new Error(source+": "+String(root.error||root.message||"ошибка API"));
   return json;
 }
+function payloadSummary(raw:unknown){
+  const root=dataOf(raw);
+  const arrays:Record<string,number>={};
+  for(const [key,value] of Object.entries(root))if(Array.isArray(value))arrays[key]=value.length;
+  const rows:unknown[]=[];
+  for(const key of ["offers","listings","lots","products","items"])if(Array.isArray(root[key]))rows.push(...root[key] as unknown[]);
+  return {
+    rootKeys:Object.keys(root).slice(0,30),
+    arrayCounts:arrays,
+    sampleItemKeys:rows.slice(0,3).map(v=>Object.keys(asObj(v)).slice(0,25)),
+    sampleTitles:rows.slice(0,5).map(v=>String(asObj(v).title??asObj(v).name??asObj(v).description??asObj(v).product_name??"").slice(0,100)),
+  };
+}
 function toOffers(raw:unknown,source:Source,wanted:string):Offer[]{
   const root=dataOf(raw);
   const candidates:unknown[]=[];
@@ -118,18 +131,30 @@ async function scanBatch(names:string[]):Promise<ScanResult[]>{
     }catch(e){sourceErrors.FunPay.push(e instanceof Error?e.message:String(e));}})(),
     (async()=>{try{
       const raw=await providerGet("Starvell","search_games",{keyword:"Roblox"});
-      const root=dataOf(raw),games=Array.isArray(root.games)?root.games:[];
-      const game=games.find((g:unknown)=>/roblox/i.test(String(asObj(g).name??asObj(g).game_slug??"")));
-      if(!game)throw new Error("API не вернул каталог Roblox");
+      const rawCatalog=await providerGet("Starvell","search_games",{keyword:"Roblox"});
+      const root=dataOf(rawCatalog),games=Array.isArray(root.games)?root.games:[];
+      const game=games.find((g:unknown)=>/roblox/i.test(String(asObj(g).name??asObj(g).game_slug??asObj(g).slug??"")));
+      if(!game){
+        sourceErrors.Starvell.push("diagnostic="+JSON.stringify({stage:"search_games",catalog:payloadSummary(rawCatalog)}).slice(0,1400));
+        throw new Error("API не вернул каталог Roblox");
+      }
       const g=asObj(game),categories=Array.isArray(g.categories)?g.categories:[];
-      const mm2=categories.filter((c:unknown)=>/mm2|murder mystery|murder-mystery/i.test(String(asObj(c).name??"")+" "+String(asObj(c).category_slug??"")));
-      if(!mm2.length)throw new Error("не найдена категория MM2 для Roblox");
+      const categoryDebug=categories.map((c:unknown)=>({name:String(asObj(c).name??""),slug:String(asObj(c).category_slug??asObj(c).slug??""),keys:Object.keys(asObj(c)).slice(0,12)})).slice(0,40);
+      const mm2=categories.filter((c:unknown)=>/mm2|murder mystery|murder-mystery/i.test(String(asObj(c).name??"")+" "+String(asObj(c).category_slug??asObj(c).slug??"")));
+      if(!mm2.length){
+        sourceErrors.Starvell.push("diagnostic="+JSON.stringify({stage:"categories",gameKeys:Object.keys(g).slice(0,25),gameName:String(g.name??""),gameSlug:String(g.game_slug??g.slug??""),categoryCount:categories.length,categories:categoryDebug}).slice(0,1800));
+        throw new Error("не найдена категория MM2 для Roblox");
+      }
       const pages=[];
+      const pageDebug=[];
       for(const cv of mm2.slice(0,4)){
-        const cat=asObj(cv),slug=String(cat.category_slug??"");if(!slug)continue;
-        pages.push(await providerGet("Starvell","list_offers",{game_slug:String(g.game_slug??"roblox"),category_slug:slug,offset:0,limit:150}));
+        const cat=asObj(cv),slug=String(cat.category_slug??cat.slug??"");if(!slug)continue;
+        const page=await providerGet("Starvell","list_offers",{game_slug:String(g.game_slug??g.slug??"roblox"),category_slug:slug,offset:0,limit:150});
+        pages.push(page);
+        pageDebug.push({category:String(cat.name??""),slug,payload:payloadSummary(page)});
       }
       sourceOffers.Starvell=names.flatMap(name=>pages.flatMap(page=>toOffers(page,"Starvell",name)));
+      sourceErrors.Starvell.push("diagnostic="+JSON.stringify({stage:"offers",game:String(g.name??"Roblox"),gameSlug:String(g.game_slug??g.slug??""),categoryCount:categories.length,matchedCategories:mm2.length,categories:categoryDebug,requestedPages:pageDebug,matchedPerItem:Object.fromEntries(names.map(name=>[name,pages.flatMap(page=>toOffers(page,"Starvell",name)).length]))}).slice(0,3500));
     }catch(e){sourceErrors.Starvell.push(e instanceof Error?e.message:String(e));}})(),
     (async()=>{try{
       const raw=await providerGet("PlayerOK","search_games",{query:"Roblox",limit:10});
