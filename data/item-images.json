@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "description": "Ручная база изображений MM2. Ключи items — точное название предмета; aliases — нормализованное имя без пробелов и символов. Если записи нет, сайт ищет изображение в вики и кэширует его в браузере.",
+  "items": {},
+  "aliases": {},
+  "sources": [
+    "https://mm2wiki.org/api.php",
+    "https://murder-mystery-2.fandom.com/api.php"
+  ]
+}
