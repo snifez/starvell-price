@@ -103,14 +103,54 @@ async function scanPlayerOK(name:string):Promise<Offer[]>{
   }));
   return pages.flatMap(page=>toOffers(page,"PlayerOK",name));
 }
-async function scanOne(name:string):Promise<ScanResult>{
-  const errors:string[]=[], offers:Offer[]=[];
-  const results=await Promise.allSettled([scanFunPay(name),scanStarvell(name),scanPlayerOK(name)]);
-  const sources:Source[]=["FunPay","Starvell","PlayerOK"];
-  results.forEach((r,i)=>{if(r.status==="fulfilled")offers.push(...r.value);else errors.push(sources[i]+": "+(r.reason instanceof Error?r.reason.message:String(r.reason)))});
-  const unique=[...new Map(offers.map(o=>[o.marketplace+"|"+o.url+"|"+o.price,o])).values()];
-  const prices=unique.map(o=>o.price);
-  return {name,offers:unique,count:unique.length,byMarketplace:{FunPay:unique.filter(o=>o.marketplace==="FunPay").length,Starvell:unique.filter(o=>o.marketplace==="Starvell").length,PlayerOK:unique.filter(o=>o.marketplace==="PlayerOK").length},medianRub:median(prices),updatedAt:new Date().toISOString(),errors};
+async function scanBatch(names:string[]):Promise<ScanResult[]>{
+  // Fetch each marketplace/category once per batch instead of repeating identical catalog
+  // requests for every item. This reduces API usage significantly for the same batch.
+  const sourceOffers:Record<Source,Offer[]>={FunPay:[],Starvell:[],PlayerOK:[]};
+  const sourceErrors:Record<Source,string[]>={FunPay:[],Starvell:[],PlayerOK:[]};
+  await Promise.all([
+    (async()=>{try{
+      const raw=await providerGet("FunPay","get_lots_by_category",{category_id:925});
+      sourceOffers.FunPay=names.flatMap(name=>toOffers(raw,"FunPay",name));
+    }catch(e){sourceErrors.FunPay.push(e instanceof Error?e.message:String(e));}})(),
+    (async()=>{try{
+      const raw=await providerGet("Starvell","search_games",{query:"Roblox"});
+      const root=dataOf(raw),games=Array.isArray(root.games)?root.games:[];
+      const game=games.find((g:unknown)=>/roblox/i.test(String(asObj(g).name??asObj(g).game_slug??"")));
+      if(!game)throw new Error("API не вернул каталог Roblox");
+      const g=asObj(game),categories=Array.isArray(g.categories)?g.categories:[];
+      const mm2=categories.filter((c:unknown)=>/mm2|murder mystery|murder-mystery/i.test(String(asObj(c).name??"")+" "+String(asObj(c).category_slug??"")));
+      if(!mm2.length)throw new Error("не найдена категория MM2 для Roblox");
+      const pages=[];
+      for(const cv of mm2.slice(0,4)){
+        const cat=asObj(cv),slug=String(cat.category_slug??"");if(!slug)continue;
+        pages.push(await providerGet("Starvell","list_offers",{game_slug:String(g.game_slug??"roblox"),category_slug:slug,offset:0,limit:150}));
+      }
+      sourceOffers.Starvell=names.flatMap(name=>pages.flatMap(page=>toOffers(page,"Starvell",name)));
+    }catch(e){sourceErrors.Starvell.push(e instanceof Error?e.message:String(e));}})(),
+    (async()=>{try{
+      const raw=await providerGet("PlayerOK","search_games",{query:"Roblox",limit:10});
+      const root=dataOf(raw),games=Array.isArray(root.games)?root.games:[];
+      const game=games.find((g:unknown)=>/roblox/i.test(String(asObj(g).name??asObj(g).slug??"")));
+      if(!game)throw new Error("API не вернул игру Roblox");
+      const g=asObj(game),categories=Array.isArray(g.categories)?g.categories:[];
+      const relevant=categories.filter((v:unknown)=>/mm2|murder mystery|предмет|items|item/i.test(String(asObj(v).name??"")+" "+String(asObj(v).slug??"")));
+      const chosen=relevant.slice(0,2),queries=chosen.length?chosen:[null],pages=[];
+      for(const cat of queries){
+        const params:Record<string,string|number>={game_slug:String(g.slug??"roblox"),limit:50,sort_field:"price",sort_direction:"ASC"};
+        if(cat?.slug)params.category_slug=String(cat.slug);
+        pages.push(await providerGet("PlayerOK","list_items",params));
+      }
+      sourceOffers.PlayerOK=names.flatMap(name=>pages.flatMap(page=>toOffers(page,"PlayerOK",name)));
+    }catch(e){sourceErrors.PlayerOK.push(e instanceof Error?e.message:String(e));}})()
+  ]);
+  return names.map(name=>{
+    const all=[...sourceOffers.FunPay,...sourceOffers.Starvell,...sourceOffers.PlayerOK];
+    const offers=all.filter(o=>matches(o.name,name))
+      .filter((o,i,a)=>a.findIndex(x=>x.marketplace===o.marketplace&&x.url===o.url&&x.price===o.price)===i);
+    const errors=(["FunPay","Starvell","PlayerOK"] as Source[]).flatMap(source=>sourceErrors[source].map(e=>source+": "+e));
+    return {name,offers,count:offers.length,byMarketplace:{FunPay:offers.filter(o=>o.marketplace==="FunPay").length,Starvell:offers.filter(o=>o.marketplace==="Starvell").length,PlayerOK:offers.filter(o=>o.marketplace==="PlayerOK").length},medianRub:median(offers.map(o=>o.price)),updatedAt:new Date().toISOString(),errors};
+  });
 }
 async function dbRequest(path:string,init:RequestInit={}){
   const url=Deno.env.get("SUPABASE_URL"),key=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -143,9 +183,9 @@ Deno.serve(async(req:Request)=>{
   const items=[...new Set(raw.map(v=>String(v??"").trim()).filter(v=>v.length>1&&v.length<=100&&!blocked(v)))];
   if(!items.length)return corsResponse({error:"Нет корректных названий предметов"},400);
   const results:ScanResult[]=[];
-  for(const name of items)results.push(await scanOne(name));
+  results.push(...await scanBatch(items));
   let persistence:{ok:boolean;error?:string}={ok:true};
   try{await saveShared(results)}catch(e){persistence={ok:false,error:e instanceof Error?e.message:String(e)}}
   const withOffers=results.filter(r=>r.count>0).length;
-  return corsResponse({ok:true,status:withOffers===results.length?"offers_found":withOffers?"partial_results":"no_offers_found",updatedAt:new Date().toISOString(),itemCount:results.length,itemsWithOffers:withOffers,persistence,sourceStatus:["FunPay","Starvell","PlayerOK"].map(source=>({source,status:results.some(r=>r.byMarketplace[source]>0)?"offers_found":results.every(r=>r.errors.some(e=>e.startsWith(source+":")) )?"unavailable":"no_matching_offers"})),results,note:"Цены берутся только из API-ответов. Если адаптер не настроен или API не вернул совпадения, старые значения не выдаются за свежие."});
+  return corsResponse({ok:true,status:withOffers===results.length?"offers_found":withOffers?"partial_results":"no_offers_found",updatedAt:new Date().toISOString(),itemCount:results.length,itemsWithOffers:withOffers,persistence,sourceStatus:["FunPay","Starvell","PlayerOK"].map(source=>({source,status:results.some(r=>r.byMarketplace[source]>0)?"offers_found":results.every(r=>r.errors.some(e=>e.startsWith(source+":")) )?"unavailable":"no_matching_offers"})),results,note:"Каждый источник запрашивается один раз на партию (с отдельными запросами к категориям), затем предложения сопоставляются локально. Сканирование сейчас покрывает MM2/Roblox; остальные игры требуют собственных категорий источников. Цены берутся только из API-ответов."});
 });
