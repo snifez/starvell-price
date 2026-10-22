@@ -87,6 +87,8 @@ function toOffers(raw:unknown,source:Source,wanted:string):Offer[]{
     const price=numericPrice(rawPrice);
     const currency=String(o.currency??o.price_currency??asObj(rawPrice).currency??"RUB").toUpperCase();
     if(currency!=="RUB"||!Number.isFinite(price)||price<=0||price>=1e8)continue;
+    // Reject Gingerscope quotes below the user-confirmed market floor.
+    if(/gingerscope/i.test(wanted)&&price<26000)continue;
     let url=String(o.offer_url??o.url??o.link??"");
     if(!/^https:\/\//i.test(url)){
       const id=String(o.offer_id??o.id??o.slug??"");
@@ -211,8 +213,13 @@ async function dbRequest(path:string,init:RequestInit={}){
 }
 async function saveShared(results:ScanResult[]):Promise<number>{
   if(!results.length)return 0;
-  const rows=results.filter(r=>r.count>0&&r.medianRub!==null).map(r=>({item_name:r.name,item_key:norm(r.name),median_rub:r.medianRub,low_rub:quantile(r.offers.map(o=>o.price),.25),high_rub:quantile(r.offers.map(o=>o.price),.75),offers:r.offers,source_counts:r.byMarketplace,updated_at:r.updatedAt}));
+  const valid=results.filter(r=>r.count>0&&r.medianRub!==null);
+  const rows=valid.map(r=>({item_name:r.name,item_key:norm(r.name),median_rub:r.medianRub,low_rub:quantile(r.offers.map(o=>o.price),.25),high_rub:quantile(r.offers.map(o=>o.price),.75),offers:r.offers,source_counts:r.byMarketplace,updated_at:r.updatedAt}));
   if(rows.length)await dbRequest("marketplace_price_cache?on_conflict=item_key",{method:"POST",headers:{"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(rows)});
+  // Do not keep showing an older invalid Gingerscope quote when current scan finds no valid offers.
+  for(const r of results.filter(r=>/gingerscope/i.test(r.name)&&!(r.count>0&&r.medianRub!==null))){
+    await dbRequest("marketplace_price_cache?item_key=eq."+encodeURIComponent(norm(r.name)),{method:"DELETE",headers:{"Prefer":"return=minimal"}});
+  }
   return rows.length;
 }
 function quantile(values:number[],q:number){const a=[...values].sort((x,y)=>x-y);return a.length?a[Math.min(a.length-1,Math.max(0,Math.floor((a.length-1)*q)))]:null;}
