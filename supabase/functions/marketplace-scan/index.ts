@@ -164,17 +164,26 @@ async function scanBatch(names:string[]):Promise<ScanResult[]>{
       const g=asObj(game),categories=Array.isArray(g.categories)?g.categories:[];
       const categoryDebug=categories.map((c:unknown)=>({name:String(asObj(c).name??""),slug:String(asObj(c).category_slug??asObj(c).slug??""),keys:Object.keys(asObj(c)).slice(0,12)})).slice(0,40);
       const mm2=categories.filter((c:unknown)=>/mm2|murder mystery|murder-mystery/i.test(String(asObj(c).name??"")+" "+String(asObj(c).category_slug??asObj(c).slug??"")));
-      if(!mm2.length){
+      // Some Starvell API versions don't label the MM2 category explicitly. In that case,
+      // search Roblox item/knife categories rather than silently skipping Starvell entirely.
+      const relevant=mm2.length?mm2:categories.filter((c:unknown)=>/item|предмет|knife|knives|weapon|оруж|godly|ancient/i.test(String(asObj(c).name??"")+" "+String(asObj(c).category_slug??asObj(c).slug??"")));
+      if(!relevant.length){
         sourceErrors.Starvell.push("diagnostic="+JSON.stringify({stage:"categories",gameKeys:Object.keys(g).slice(0,25),gameName:String(g.name??""),gameSlug:String(g.game_slug??g.slug??""),categoryCount:categories.length,categories:categoryDebug}).slice(0,1800));
-        throw new Error("не найдена категория MM2 для Roblox");
+        throw new Error("не найдены категории MM2 или Roblox items для поиска");
       }
       const pages=[];
       const pageDebug=[];
-      for(const cv of mm2.slice(0,4)){
+      for(const cv of relevant.slice(0,6)){
         const cat=asObj(cv),slug=String(cat.category_slug??cat.slug??"");if(!slug)continue;
-        const page=await providerGet("Starvell","list_offers",{game_slug:String(g.game_slug??g.slug??"roblox"),category_slug:slug,offset:0,limit:150});
-        pages.push(page);
-        pageDebug.push({category:String(cat.name??""),slug,payload:payloadSummary(page)});
+        // Walk multiple pages so rare items such as Gingerscope aren't missed after the first 150 offers.
+        for(const offset of [0,150,300]){
+          const page=await providerGet("Starvell","list_offers",{game_slug:String(g.game_slug??g.slug??"roblox"),category_slug:slug,offset,limit:150});
+          pages.push(page);
+          pageDebug.push({category:String(cat.name??""),slug,offset,payload:payloadSummary(page)});
+          const pageRoot=dataOf(page);
+          const listed=["offers","listings","lots","products","items"].map(k=>Array.isArray(pageRoot[k])?pageRoot[k].length:0).reduce((a,b)=>Math.max(a,b),0);
+          if(listed<150)break;
+        }
       }
       sourceOffers.Starvell=names.flatMap(name=>pages.flatMap(page=>toOffers(page,"Starvell",name)));
       // Successful diagnostics must not be recorded as source errors; otherwise the API
