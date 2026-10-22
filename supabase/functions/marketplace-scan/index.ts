@@ -61,6 +61,18 @@ function searchableText(value:unknown,depth=0):string{
     .map(([k,v])=>k+" "+searchableText(v,depth+1)).join(" ");
   return "";
 }
+function numericPrice(value:unknown):number{
+  if(typeof value==="number")return value;
+  if(value&&typeof value==="object"){
+    const p=asObj(value);
+    for(const k of ["amount","value","rub","price","formatted"])if(p[k]!==undefined){
+      const n=numericPrice(p[k]);if(Number.isFinite(n)&&n>0)return n;
+    }
+    return NaN;
+  }
+  const s=String(value??"").replace(/[^0-9,.-]/g,"").replace(/\s/g,"").replace(",",".");
+  return s?Number(s):NaN;
+}
 function toOffers(raw:unknown,source:Source,wanted:string):Offer[]{
   const root=dataOf(raw);
   const candidates:unknown[]=[];
@@ -68,12 +80,12 @@ function toOffers(raw:unknown,source:Source,wanted:string):Offer[]{
   const out:Offer[]=[];
   for(const value of candidates){
     const o=asObj(value),seller=asObj(o.seller);
-    const title=String(o.title??o.name??o.description??o.brief_description??o.product_name??"").trim();
+    const title=String(o.title??o.name??o.product_name??o.brief_description??o.description??"").trim();
     const searchable=[title,o.brief_description,o.description,o.attributes,o.subcategory,o.category].map(v=>searchableText(v)).join(" ");
     if(!title||blocked(title)||blocked(searchable)||!matches(searchable,wanted))continue;
-    const rawPrice=o.price??o.price_raw??o.priceRaw??o.raw_price;
-    const price=typeof rawPrice==="number"?rawPrice:Number(String(rawPrice??"").replace(/\s/g,"").replace(",","."));
-    const currency=String(o.currency??o.price_currency??"RUB").toUpperCase();
+    const rawPrice=o.price??o.price_raw??o.priceRaw??o.raw_price??o.min_order_currency_amount;
+    const price=numericPrice(rawPrice);
+    const currency=String(o.currency??o.price_currency??asObj(rawPrice).currency??"RUB").toUpperCase();
     if(currency!=="RUB"||!Number.isFinite(price)||price<=0||price>=1e8)continue;
     let url=String(o.offer_url??o.url??o.link??"");
     if(!/^https:\/\//i.test(url)){
@@ -197,10 +209,11 @@ async function dbRequest(path:string,init:RequestInit={}){
   const body=await res.text();if(!res.ok)throw new Error("Supabase DB HTTP "+res.status+": "+body.slice(0,300));
   return body?JSON.parse(body):null;
 }
-async function saveShared(results:ScanResult[]){
-  if(!results.length)return;
+async function saveShared(results:ScanResult[]):Promise<number>{
+  if(!results.length)return 0;
   const rows=results.filter(r=>r.count>0&&r.medianRub!==null).map(r=>({item_name:r.name,item_key:norm(r.name),median_rub:r.medianRub,low_rub:quantile(r.offers.map(o=>o.price),.25),high_rub:quantile(r.offers.map(o=>o.price),.75),offers:r.offers,source_counts:r.byMarketplace,updated_at:r.updatedAt}));
   if(rows.length)await dbRequest("marketplace_price_cache?on_conflict=item_key",{method:"POST",headers:{"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(rows)});
+  return rows.length;
 }
 function quantile(values:number[],q:number){const a=[...values].sort((x,y)=>x-y);return a.length?a[Math.min(a.length-1,Math.max(0,Math.floor((a.length-1)*q)))]:null;}
 async function readShared(){
@@ -222,8 +235,8 @@ Deno.serve(async(req:Request)=>{
   if(!items.length)return corsResponse({error:"Нет корректных названий предметов"},400);
   const results:ScanResult[]=[];
   results.push(...await scanBatch(items));
-  let persistence:{ok:boolean;error?:string}={ok:true};
-  try{await saveShared(results)}catch(e){persistence={ok:false,error:e instanceof Error?e.message:String(e)}}
+  let persistence:{ok:boolean;savedItems?:number;error?:string}={ok:true,savedItems:0};
+  try{persistence.savedItems=await saveShared(results)}catch(e){persistence={ok:false,error:e instanceof Error?e.message:String(e)}}
   const withOffers=results.filter(r=>r.count>0).length;
   return corsResponse({ok:true,status:withOffers===results.length?"offers_found":withOffers?"partial_results":"no_offers_found",updatedAt:new Date().toISOString(),itemCount:results.length,itemsWithOffers:withOffers,persistence,sourceStatus:["FunPay","Starvell","PlayerOK"].map(source=>({source,status:results.some(r=>r.byMarketplace[source]>0)?"offers_found":results.every(r=>r.errors.some(e=>e.startsWith(source+":")) )?"unavailable":"no_matching_offers"})),results,note:"Каждый источник запрашивается один раз на партию (с отдельными запросами к категориям), затем предложения сопоставляются локально. Сканирование сейчас покрывает MM2/Roblox; остальные игры требуют собственных категорий источников. Цены берутся только из API-ответов."});
 });
