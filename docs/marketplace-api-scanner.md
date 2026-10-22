@@ -1,6 +1,6 @@
 # Marketplace API scanner setup
 
-The scanner no longer parses marketplace HTML. It uses structured API adapters for FunPay, Starvell and PlayerOK and only stores prices that came from returned offers.
+The scanner no longer parses marketplace HTML. It uses structured API adapters for FunPay, Starvell and PlayerOK and only stores prices that came from returned offers. Each scan batch now fetches each source/category listing once where possible and matches the requested item names locally, reducing duplicate API calls.
 
 ## Free-tier constraint
 
@@ -18,6 +18,6 @@ The current adapters use Parse.bot as a structured third-party API provider, not
 
 - The shared price table is protected by RLS and is accessed server-side by the Edge Function.
 - Only actual API offers are saved. A failed or empty search does not overwrite a previously stored price with zero or a guessed value.
-- The cache is shared across visitors, but this does not automatically mean all catalog prices are refreshed: a scan must run and the APIs must return matching offers.
+- The cache is shared across visitors, but this does not automatically mean all catalog prices are refreshed: a scan must run and the APIs must return matching offers. Current adapter coverage is MM2 items in Roblox-related categories only; it is not yet a universal scanner for CS2, Rust, Dota 2, Fortnite, or every game in the site catalog.
 - A third-party API response or an HTTP 200 does not prove a matching listing exists. Check `results[].offers`, `results[].errors`, and `sourceStatus`.
 - The provider endpoints are not official APIs published by FunPay, Starvell, or PlayerOK. Availability, schema, rate limits, and free-tier quotas can change.
