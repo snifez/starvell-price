@@ -1,0 +1,4 @@
+project_id = "jmahfpaxurmsamxbtvzj"
+
+[functions.starpets-sync]
+verify_jwt = false
