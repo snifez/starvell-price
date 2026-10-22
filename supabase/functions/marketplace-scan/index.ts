@@ -8,6 +8,7 @@ const cors = {
 };
 const FUNPAY_CATEGORY = "https://funpay.com/lots/925/";
 const PLAYEROK_SEARCH = "https://playerok.com/products?search=";
+const STARVELL_CATEGORIES = ["knives","guns","sets","pets","misc"].map(x => `https://starvell.com/roblox/mm2/${x}`);
 const HEADERS = {
   "User-Agent": "Mozilla/5.0 (compatible; PriceWatch/1.0; public listing reader)",
   "Accept": "text/html,application/xhtml+xml",
@@ -61,7 +62,7 @@ async function getHtml(url: string) {
   if (!html || html.length < 300) throw new Error(`Пустая или слишком короткая страница (${new URL(url).hostname})`);
   return html;
 }
-function anchors(html: string, base: string, source: "FunPay" | "PlayerOK", wanted: string) {
+function anchors(html: string, base: string, source: "FunPay" | "PlayerOK" | "Starvell", wanted: string) {
   const out: Array<Record<string, unknown>> = [];
   // Match product cards and read title/price from the card itself, never from neighbouring cards.
   const re = /<a\b([^>]*\bhref\s*=\s*(["'])(.*?)\2[^>]*)>([\s\S]*?)<\/a>/gi;
@@ -70,7 +71,7 @@ function anchors(html: string, base: string, source: "FunPay" | "PlayerOK", want
     const attrs = m[1], rawUrl = m[3], body = m[4];
     let url = "";
     try { url = new URL(rawUrl, base).href; } catch { continue; }
-    if (source === "FunPay" ? !/funpay\.com\/lots\/offer\?id=\d+/i.test(url) : !/playerok\.com\/products\//i.test(url)) continue;
+    if (source === "FunPay" ? !/funpay\.com\/lots\/offer\?id=\d+/i.test(url) : source === "PlayerOK" ? !/playerok\.com\/products\//i.test(url) : !/starvell\.com\/roblox\/mm2\//i.test(url) || /\/(?:knives|guns|sets|pets|misc)\/?(?:\?|$)/i.test(url)) continue;
 
     const titleAttr = attrs.match(/\b(?:title|aria-label)\s*=\s*(["'])(.*?)\1/i)?.[2] || "";
     const titleNode = body.match(/<[^>]*class=["'][^"']*(?:tc-desc-text|product-card__title|product-title)[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i)?.[1] || "";
@@ -119,7 +120,7 @@ function median(nums: number[]) {
   const mid = Math.floor(a.length / 2);
   return a.length % 2 ? a[mid] : Math.round(((a[mid - 1] + a[mid]) / 2) * 100) / 100;
 }
-async function scanOne(name: string, categoryHtml: string | null, funpayError: string | null) {
+async function scanOne(name: string, categoryHtml: string | null, funpayError: string | null, starvellPages: Array<{url:string;html:string|null;error:string|null}>) {
   const offers: Array<Record<string, unknown>> = [], errors: string[] = [];
   if (categoryHtml) {
     const found = anchors(categoryHtml, FUNPAY_CATEGORY, "FunPay", name);
@@ -135,11 +136,13 @@ async function scanOne(name: string, categoryHtml: string | null, funpayError: s
   } catch (e) {
     errors.push(`PlayerOK: ${e instanceof Error ? e.message : String(e)}`);
   }
+  for (const page of starvellPages) { if (!page.html) continue; offers.push(...anchors(page.html, page.url, "Starvell", name)); }
+  if (!offers.some(o => o.marketplace === "Starvell")) errors.push("Starvell: подходящий лот не найден в загруженных публичных категориях; динамические карточки могут быть недоступны");
   const unique = [...new Map(offers.map(o => [`${o.marketplace}|${o.url}|${o.price}`, o])).values()];
   const prices = unique.map(o => Number(o.price)).filter(n => Number.isFinite(n) && n > 0);
   return {
     name, offers: unique, count: unique.length,
-    byMarketplace: { FunPay: unique.filter(o => o.marketplace === "FunPay").length, PlayerOK: unique.filter(o => o.marketplace === "PlayerOK").length },
+    byMarketplace: { FunPay: unique.filter(o => o.marketplace === "FunPay").length, Starvell: unique.filter(o => o.marketplace === "Starvell").length, PlayerOK: unique.filter(o => o.marketplace === "PlayerOK").length },
     medianRub: median(prices), updatedAt: new Date().toISOString(), errors,
   };
 }
@@ -148,7 +151,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "GET") return response({
     ok: true, service: "price-watch-marketplace-scan",
     usage: "POST JSON { items: ['Gingerscope', 'Harvester'] }",
-    limitations: "Only public listings present in fetched HTML can be discovered; dynamic or blocked listings may be missed.",
+    limitations: "Scans public HTML from FunPay, Starvell MM2 categories and PlayerOK; dynamic, paginated or blocked listings may be missed.",
   });
   if (req.method !== "POST") return response({ error: "Method not allowed" }, 405);
   let body: unknown;
@@ -160,15 +163,16 @@ Deno.serve(async (req: Request) => {
   if (!items.length) return response({ error: "Нет корректных названий предметов после фильтрации" }, 400);
   let categoryHtml: string | null = null, funpayError: string | null = null;
   try { categoryHtml = await getHtml(FUNPAY_CATEGORY); } catch (e) { funpayError = e instanceof Error ? e.message : String(e); }
+  const starvellPages = await Promise.all(STARVELL_CATEGORIES.map(async url => { try { return { url, html: await getHtml(url), error: null }; } catch (e) { return { url, html: null, error: e instanceof Error ? e.message : String(e) }; } }));
   const results: Array<Record<string, unknown>> = [];
   for (let i = 0; i < items.length; i += 3) {
     const batch = items.slice(i, i + 3);
-    const part = await Promise.all(batch.map(name => scanOne(name, categoryHtml, funpayError)));
+    const part = await Promise.all(batch.map(name => scanOne(name, categoryHtml, funpayError, starvellPages)));
     results.push(...part);
   }
   return response({
     ok: true, updatedAt: new Date().toISOString(), itemCount: results.length,
-    sourceStatus: { FunPay: categoryHtml ? "page fetched" : `unavailable: ${funpayError}`, PlayerOK: "queried per item; see individual errors" },
+    sourceStatus: { FunPay: categoryHtml ? "page fetched" : `unavailable: ${funpayError}`, Starvell: `${starvellPages.filter(p => p.html).length}/${starvellPages.length} category pages fetched`, PlayerOK: "queried per item; see individual errors" },
     results,
     note: "Результат отражает только подходящие публичные лоты, найденные в HTML. Нулевое число объявлений не доказывает отсутствие лотов.",
   });
