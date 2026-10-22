@@ -2,3 +2,6 @@ project_id = "jmahfpaxurmsamxbtvzj"
 
 [functions.starpets-sync]
 verify_jwt = false
+
+[functions.marketplace-scan]
+verify_jwt = false
