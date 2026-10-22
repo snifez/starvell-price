@@ -1,191 +1,133 @@
-// Price Watch — public marketplace search by exact item name.
-// Reads public HTML only. Does not bypass login, CAPTCHA, anti-bot controls, or site access restrictions.
+// Price Watch — structured API adapters. No HTML parsing and no invented prices.
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Max-Age": "86400",
 };
-const SOURCES = [
-  { name: "PlayerOK", url: (q: string) => "https://playerok.com/products?search=" + encodeURIComponent(q), hosts: /playerok\.com/i },
-  { name: "Plati", url: (q: string) => "https://plati.market/search/" + encodeURIComponent(q), hosts: /plati\.market/i },
-  { name: "GGSEL", url: (q: string) => "https://ggsel.net/catalog?search=" + encodeURIComponent(q), hosts: /ggsel\.net/i },
-  { name: "Tradly", url: (_q: string) => "https://tradly.gg/catalog", hosts: /tradly\.gg/i },
-];
-const FUNPAY_MM2 = "https://funpay.com/lots/925/";
-const STARVELL_CATEGORIES = ["knives","guns","sets","pets","misc"].map(x => `https://starvell.com/roblox/mm2/${x}`);
-const HEADERS = {
-  "User-Agent": "Mozilla/5.0 (compatible; PriceWatch/1.0; public listing reader)",
-  "Accept": "text/html,application/xhtml+xml",
-  "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.7",
+type Source = "FunPay" | "Starvell";
+type Offer = { name:string; price:number; currency:"RUB"; marketplace:Source; url:string; image?:string };
+type ScanResult = { name:string; offers:Offer[]; count:number; byMarketplace:Record<string,number>; medianRub:number|null; updatedAt:string; errors:string[] };
+const PROVIDERS = {
+  FunPay: "https://api.parse.bot/scraper/b07b6749-5fbe-4b92-ac50-82aab4087ce5",
+  Starvell: "https://api.parse.bot/scraper/ab8a5cd8-8fbf-4c5f-8c27-05206d5db84b",
 };
-type Source = "FunPay" | "PlayerOK" | "Plati" | "GGSEL" | "Tradly" | "Starvell";
-function response(data: unknown, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { ...cors, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" } });
+const corsResponse = (data:unknown,status=200) => new Response(JSON.stringify(data),{status,headers:{...cors,"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"}});
+const norm=(s:string)=>s.normalize("NFKC").toLowerCase().replace(/[’']/g,"").replace(/[^a-zа-яё0-9]+/gi," ").trim().replace(/\s+/g," ");
+const blocked=(s:string)=>/\b(аккаунт|account|акк|набор|bundle|пакет|комплект|инвентарь|inventory)\b/i.test(s);
+function matches(title:string,wanted:string){
+  const a=norm(title),b=norm(wanted); if(!a||!b)return false;
+  if(a===b||(" "+a+" ").includes(" "+b+" "))return true;
+  const tokens=b.split(" ").filter(t=>t.length>1);
+  return tokens.length>0&&tokens.every(t=>(" "+a+" ").includes(" "+t+" "));
 }
-function decode(s: string) {
-  return s.replace(/&nbsp;|&#160;|&#xA0;/gi, " ").replace(/&amp;/gi, "&").replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)));
+function median(values:number[]){const a=[...values].sort((x,y)=>x-y);if(!a.length)return null;const m=Math.floor(a.length/2);return a.length%2?a[m]:Math.round((a[m-1]+a[m])/2*100)/100;}
+function asObj(x:unknown):Record<string,any>{return x&&typeof x==="object"?x as Record<string,any>:{}}
+function dataOf(x:unknown):Record<string,any>{const o=asObj(x);return asObj(o.data??o.result??o)}
+async function providerGet(source:Source,endpoint:string,params:Record<string,string|number>={}){
+  const key=Deno.env.get("PARSE_API_KEY");
+  if(!key)throw new Error("Не задан секрет PARSE_API_KEY в Supabase");
+  const url=new URL(PROVIDERS[source]+"/"+endpoint);
+  for(const [k,v] of Object.entries(params))url.searchParams.set(k,String(v));
+  const res=await fetch(url,{headers:{"X-API-Key":key,"Accept":"application/json"},signal:AbortSignal.timeout(18000)});
+  const raw=await res.text(); let json:unknown;try{json=JSON.parse(raw)}catch{throw new Error(source+": API вернул не JSON (HTTP "+res.status+")")}
+  if(!res.ok)throw new Error(source+": API HTTP "+res.status);
+  const root=asObj(json);if(root.status==="error"||root.error)throw new Error(source+": "+String(root.error||root.message||"ошибка API"));
+  return json;
 }
-function text(s: string) {
-  return decode(s.replace(/<script\b[\s\S]*?<\/script>/gi, " ").replace(/<style\b[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " "))
-    .replace(/\s+/g, " ").trim();
-}
-function norm(s: string) { return s.normalize("NFKC").toLowerCase().replace(/[’']/g, "").replace(/[^a-zа-яё0-9]+/gi, " ").trim().replace(/\s+/g, " "); }
-function money(s: string): number | null {
-  const m = s.match(/(?:₽|руб(?:лей|ля|ль)?\.?|RUB)\s*([\d\s\u00a0.,]+)|([\d\s\u00a0.,]+)\s*(?:₽|руб(?:лей|ля|ль)?\.?|RUB)/i);
-  if (!m) return null;
-  let v = (m[1] || m[2] || "").replace(/[\s\u00a0]/g, "");
-  if (v.includes(",") && v.includes(".")) v = v.lastIndexOf(",") > v.lastIndexOf(".") ? v.replace(/\./g, "").replace(",", ".") : v.replace(/,/g, "");
-  else v = v.replace(",", ".");
-  const n = Number(v); return Number.isFinite(n) && n > 0 && n < 1e8 ? n : null;
-}
-function blocked(s: string) { return /\b(аккаунт|account|акк|набор|bundle|пакет|комплект|лотом|лотами|set of|full set|инвентарь|inventory)\b/i.test(s); }
-function nameMatches(title: string, wanted: string) {
-  const a = norm(title), b = norm(wanted);
-  if (!a || !b) return false;
-  // Require all meaningful item-name tokens; avoid matching a different item just because one word overlaps.
-  const tokens = b.split(" ").filter(x => x.length > 1);
-  return a === b || ((" " + a + " ").includes(" " + b + " ")) ||
-    (tokens.length > 0 && tokens.every(token => (" " + a + " ").includes(" " + token + " ")));
-}
-async function getHtml(url: string) {
-  const r = await fetch(url, { headers: HEADERS, signal: AbortSignal.timeout(9000), redirect: "follow" });
-  if (!r.ok) throw new Error(`HTTP ${r.status} (${new URL(url).hostname})`);
-  const html = await r.text();
-  if (!html || html.length < 250) throw new Error(`Пустая или слишком короткая страница (${new URL(url).hostname})`);
-  return html;
-}
-function structuredOffers(html: string, base: string, source: Source, wanted: string) {
-  const out: Array<Record<string, unknown>> = [];
-  // Many marketplaces embed listings in JSON-LD even when their visible cards are client-rendered.
-  const scripts = html.match(/<script\\b[^>]*type=["']application\\/ld\\+json["'][^>]*>[\\s\\S]*?<\\/script>/gi) || [];
-  for (const script of scripts) {
-    const raw = script.replace(/^<[\\s\\S]*?>/i, "").replace(/<\\/script>$/i, "").trim();
-    let parsed: unknown;
-    try { parsed = JSON.parse(raw); } catch { continue; }
-    const queue: unknown[] = [parsed];
-    while (queue.length) {
-      const node = queue.pop();
-      if (!node || typeof node !== "object") continue;
-      if (Array.isArray(node)) { queue.push(...node); continue; }
-      const obj = node as Record<string, unknown>;
-      if (obj["@graph"]) queue.push(obj["@graph"]);
-      const type = String(obj["@type"] || "").toLowerCase();
-      if (type.includes("product") || obj.offers) {
-        const title = String(obj.name || obj.headline || "");
-        const offerList = Array.isArray(obj.offers) ? obj.offers : [obj.offers];
-        if (title && nameMatches(title, wanted) && !blocked(title)) {
-          for (const offer of offerList) {
-            if (!offer || typeof offer !== "object") continue;
-            const o = offer as Record<string, unknown>;
-            const currency = String(o.priceCurrency || o.currency || "RUB").toUpperCase();
-            if (currency !== "RUB") continue;
-            const price = Number(String(o.price || o.lowPrice || "").replace(",", "."));
-            if (!Number.isFinite(price) || price <= 0 || price >= 1e8) continue;
-            let url = String(o.url || obj.url || base);
-            try { url = new URL(url, base).href; } catch { url = base; }
-            const imageRaw = Array.isArray(obj.image) ? obj.image[0] : obj.image;
-            let image = ""; try { const u = new URL(String(imageRaw || ""), base); if (u.protocol === "https:") image = u.href; } catch {}
-            out.push({ name: title, price, currency: "RUB", marketplace: source, url, image, sourceUrl: base });
-          }
-        }
-      }
-      // Handle nested product/offer structures commonly used by catalog JSON-LD.
-      for (const key of ["itemListElement", "item", "mainEntity", "hasOfferCatalog"]) if (obj[key]) queue.push(obj[key]);
+function toOffers(raw:unknown,source:Source,wanted:string):Offer[]{
+  const root=dataOf(raw);
+  const candidates:unknown[]=[];
+  for(const key of ["offers","listings","lots","products","items"])if(Array.isArray(root[key]))candidates.push(...root[key]);
+  const out:Offer[]=[];
+  for(const value of candidates){
+    const o=asObj(value),seller=asObj(o.seller);
+    const title=String(o.title??o.name??o.description??o.brief_description??o.product_name??"").trim();
+    if(!title||blocked(title)||!matches(title,wanted))continue;
+    const rawPrice=o.price??o.price_raw??o.priceRaw??o.raw_price;
+    const price=typeof rawPrice==="number"?rawPrice:Number(String(rawPrice??"").replace(/\s/g,"").replace(",","."));
+    const currency=String(o.currency??o.price_currency??"RUB").toUpperCase();
+    if(currency!=="RUB"||!Number.isFinite(price)||price<=0||price>=1e8)continue;
+    let url=String(o.offer_url??o.url??o.link??"");
+    if(!/^https:\/\//i.test(url)){
+      const id=String(o.offer_id??o.id??o.slug??"");
+      if(source==="FunPay"&&id)url="https://funpay.com/lots/offer?id="+encodeURIComponent(id);
+      else if(source==="Starvell"&&id)url="https://starvell.com/offer/"+encodeURIComponent(id);
     }
+    if(!/^https:\/\//i.test(url))continue;
+    const image=String(o.image??o.image_url??(Array.isArray(o.images)?asObj(o.images[0]).url:"")??"");
+    out.push({name:title,price,currency:"RUB",marketplace:source,url,...(/^https:\/\//i.test(image)?{image}:{})});
   }
-  return out;
+  const seen=new Set<string>();
+  return out.filter(o=>{const k=o.marketplace+"|"+o.url+"|"+o.price;if(seen.has(k))return false;seen.add(k);return true;});
 }
-function anchors(html: string, base: string, source: Source, wanted: string) {
-  const out: Array<Record<string, unknown>> = structuredOffers(html, base, source, wanted);
-  const re = /<a\b([^>]*\bhref\s*=\s*(["'])(.*?)\2[^>]*)>([\s\S]*?)<\/a>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(html)) && out.length < 1800) {
-    const attrs = m[1], rawUrl = m[3], body = m[4];
-    let url = ""; try { url = new URL(rawUrl, base).href; } catch { continue; }
-    if (source === "FunPay" && !/funpay\.com\/lots\/offer\?id=\d+/i.test(url)) continue;
-    if (source === "PlayerOK" && !/playerok\.com\/products\//i.test(url)) continue;
-    if (source === "Starvell" && (!/starvell\.com\/roblox\/mm2\//i.test(url) || /\/(?:knives|guns|sets|pets|misc)\/?(?:\?|$)/i.test(url))) continue;
-    if (source === "Plati" && !/plati\.market\//i.test(url)) continue;
-    if (source === "GGSEL" && !/ggsel\.net\//i.test(url)) continue;
-    if (source === "Tradly" && !/tradly\.gg\//i.test(url)) continue;
-    const titleAttr = attrs.match(/\b(?:title|aria-label)\s*=\s*(["'])(.*?)\1/i)?.[2] || "";
-    const titleNode = body.match(/<[^>]*class=["'][^"']*(?:tc-desc-text|product-card__title|product-title|product-name|item-title|title)[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i)?.[1] || "";
-    const imgAlt = body.match(/<img\b[^>]*\balt\s*=\s*(["'])(.*?)\1/i)?.[2] || "";
-    const bodyText = text(body);
-    const title = text(titleAttr || titleNode || imgAlt || bodyText).slice(0, 180);
-    if (!title || blocked(title) || !nameMatches(title, wanted)) continue;
-    const priceNode = body.match(/<[^>]*class=["'][^"']*(?:tc-price|tc-amount|price|amount|cost)[^"']*["'][^>]*>[\s\S]*?<\/[^>]+>/i)?.[0] || "";
-    let price: number | null = null;
-    if (source === "FunPay") {
-      const dataS = priceNode.match(/\bdata-s\s*=\s*(["'])([\d.,]+)\1/i)?.[2];
-      if (dataS) { const n = Number(dataS.replace(",", ".")); if (Number.isFinite(n) && n > 0 && n < 1e8) price = n; }
-    }
-    if (price === null) price = money(text(priceNode || bodyText));
-    if (price === null || price <= 0) continue;
-    const imgMatch = body.match(/<img\b[^>]*(?:src|data-src|data-original)\s*=\s*(["'])(.*?)\1/i);
-    let image = ""; try { const p = new URL(imgMatch?.[2] || "", base); if (p.protocol === "https:" && !/avatar|logo|emoji|icon/i.test(p.href)) image = p.href; } catch {}
-    out.push({ name: title, price, currency: "RUB", marketplace: source, url, image, sourceUrl: base });
-  }
-  const seen = new Set<string>();
-  return out.filter(x => { const k = String(x.url) + "|" + String(x.price); if (seen.has(k)) return false; seen.add(k); return true; });
+async function scanFunPay(name:string):Promise<Offer[]>{
+  // Lot 925 is the project's existing public FunPay MM2 category. The API filters by listing text.
+  const raw=await providerGet("FunPay","get_lots_by_category",{lot_id:925,query:name});
+  return toOffers(raw,"FunPay",name);
 }
-function median(nums: number[]) { const a = [...nums].sort((x,y)=>x-y); if (!a.length) return null; const m=Math.floor(a.length/2); return a.length%2?a[m]:Math.round((a[m-1]+a[m])/2*100)/100; }
-async function scanOne(name: string, pages: Array<{source:Source;url:string;html:string|null;error:string|null}>) {
-  const offers: Array<Record<string, unknown>> = [], errors: string[] = [];
-  for (const p of pages) {
-    if (!p.html) { if (p.error) errors.push(`${p.source}: ${p.error}`); continue; }
-    const found = anchors(p.html, p.url, p.source, name);
-    offers.push(...found);
-    if (!found.length) errors.push(`${p.source}: точный лот не найден в доступном HTML; выдача может быть динамической, пагинированной или ограниченной`);
+async function scanStarvell(name:string):Promise<Offer[]>{
+  // Resolve Roblox categories via structured API, then query the relevant MM2 category offers.
+  const raw=await providerGet("Starvell","search_games",{query:"Roblox"});
+  const root=dataOf(raw), games=Array.isArray(root.games)?root.games:[];
+  const roblox=games.find((g:unknown)=>/roblox/i.test(String(asObj(g).name??asObj(g).game_slug??"")));
+  if(!roblox)throw new Error("Starvell: API не вернул каталог Roblox");
+  const game=asObj(roblox), categories=Array.isArray(game.categories)?game.categories:[];
+  const mm2=categories.filter((c:unknown)=>/mm2|murder mystery|murder-mystery/i.test(String(asObj(c).name??"")+" "+String(asObj(c).category_slug??"")));
+  if(!mm2.length)throw new Error("Starvell: в API не найдена категория MM2 для Roblox");
+  const results:Offer[]=[];
+  // Keep within the free provider quota; scan only a few explicitly relevant categories per item.
+  for(const catValue of mm2.slice(0,4)){
+    const cat=asObj(catValue),slug=String(cat.category_slug??"");
+    if(!slug)continue;
+    const offers=await providerGet("Starvell","list_offers",{game_slug:String(game.game_slug??"roblox"),category_slug:slug,offset:0,limit:150});
+    results.push(...toOffers(offers,"Starvell",name));
   }
-  const unique = [...new Map(offers.map(o=>[`${o.marketplace}|${o.url}|${o.price}`,o])).values()];
-  const prices = unique.map(o=>Number(o.price)).filter(n=>Number.isFinite(n)&&n>0);
-  const names = ["FunPay","PlayerOK","Starvell","Plati","GGSEL","Tradly"];
-  const byMarketplace = Object.fromEntries(names.map(k=>[k,unique.filter(o=>o.marketplace===k).length]));
-  return { name, offers:unique, count:unique.length, byMarketplace, medianRub:median(prices), updatedAt:new Date().toISOString(), errors };
+  return results;
 }
-Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  if (req.method === "GET") return response({ok:true,service:"price-watch-marketplace-scan",usage:"POST JSON { items: ['Gingerscope', 'AWP | Medusa'] }",sources:["FunPay (MM2 category)","PlayerOK","Starvell (MM2 categories)","Plati.market","GGSEL","Tradly"],limitations:"Searches public HTML only. Each marketplace has its own markup; JavaScript-rendered, paginated, blocked, login-only or non-RUB offers can be missed. No anti-bot bypass."});
-  if (req.method !== "POST") return response({error:"Method not allowed"},405);
-  let body: unknown; try { body=await req.json(); } catch { return response({error:"Ожидается JSON в теле запроса"},400); }
-  const raw=(body as {items?:unknown})?.items;
-  if (!Array.isArray(raw)||raw.length<1) return response({error:"Передай массив items, например ['Gingerscope']"},400);
-  if (raw.length>12) return response({error:"За один запрос можно проверить не более 12 предметов"},400);
-  const items=[...new Set(raw.map(x=>String(x??"").trim()).filter(x=>x.length>1&&x.length<=100&&!blocked(x)))];
-  if (!items.length) return response({error:"Нет корректных названий предметов после фильтрации"},400);
-  const pages: Array<{source:Source;url:string;html:string|null;error:string|null}> = [];
-  // Generic game-item sources, searched by name where the site exposes a public search URL.
-  const searchedPages = await Promise.all(SOURCES.flatMap(source => items.map(async name => {
-    const url = source.url(name);
-    try { return {source:source.name as Source,url,html:await getHtml(url),error:null}; }
-    catch(e) { return {source:source.name as Source,url,html:null,error:e instanceof Error?e.message:String(e)}; }
-  })));
-  pages.push(...searchedPages);
-  // Public category pages for MM2 sources are also checked; matching is still by item name.
-  try { pages.push({source:"FunPay",url:FUNPAY_MM2,html:await getHtml(FUNPAY_MM2),error:null}); }
-  catch(e) { pages.push({source:"FunPay",url:FUNPAY_MM2,html:null,error:e instanceof Error?e.message:String(e)}); }
-  const sv=await Promise.all(STARVELL_CATEGORIES.map(async url=>{try{return {source:"Starvell" as Source,url,html:await getHtml(url),error:null};}catch(e){return {source:"Starvell" as Source,url,html:null,error:e instanceof Error?e.message:String(e)};}}));
-  pages.push(...sv);
-  const results: Array<Record<string,unknown>>=[];
-  for(let i=0;i<items.length;i+=3){
-    const batch=items.slice(i,i+3);
-    results.push(...await Promise.all(batch.map(name=>scanOne(name,pages.filter(p=>{
-      if(p.source==="FunPay"||p.source==="Starvell") return true;
-      return p.url===SOURCES.find(s=>s.name===p.source)?.url(name);
-    }))));
+async function scanOne(name:string):Promise<ScanResult>{
+  const errors:string[]=[], offers:Offer[]=[];
+  const results=await Promise.allSettled([scanFunPay(name),scanStarvell(name)]);
+  const sources:Source[]=["FunPay","Starvell"];
+  results.forEach((r,i)=>{if(r.status==="fulfilled")offers.push(...r.value);else errors.push(sources[i]+": "+(r.reason instanceof Error?r.reason.message:String(r.reason)))});
+  const unique=[...new Map(offers.map(o=>[o.marketplace+"|"+o.url+"|"+o.price,o])).values()];
+  const prices=unique.map(o=>o.price);
+  return {name,offers:unique,count:unique.length,byMarketplace:{FunPay:unique.filter(o=>o.marketplace==="FunPay").length,Starvell:unique.filter(o=>o.marketplace==="Starvell").length},medianRub:median(prices),updatedAt:new Date().toISOString(),errors};
+}
+async function dbRequest(path:string,init:RequestInit={}){
+  const url=Deno.env.get("SUPABASE_URL"),key=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if(!url||!key)throw new Error("Supabase service credentials are not available");
+  const res=await fetch(url.replace(/\/$/,"")+"/rest/v1/"+path,{...init,headers:{apikey:key,Authorization:"Bearer "+key,"Content-Type":"application/json",Prefer:"return=representation",...(init.headers||{})}});
+  const body=await res.text();if(!res.ok)throw new Error("Supabase DB HTTP "+res.status+": "+body.slice(0,300));
+  return body?JSON.parse(body):null;
+}
+async function saveShared(results:ScanResult[]){
+  if(!results.length)return;
+  const rows=results.filter(r=>r.count>0&&r.medianRub!==null).map(r=>({item_name:r.name,item_key:norm(r.name),median_rub:r.medianRub,low_rub:quantile(r.offers.map(o=>o.price),.25),high_rub:quantile(r.offers.map(o=>o.price),.75),offers:r.offers,source_counts:r.byMarketplace,updated_at:r.updatedAt}));
+  if(rows.length)await dbRequest("marketplace_price_cache?on_conflict=item_key",{method:"POST",headers:{"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(rows)});
+}
+function quantile(values:number[],q:number){const a=[...values].sort((x,y)=>x-y);return a.length?a[Math.min(a.length-1,Math.max(0,Math.floor((a.length-1)*q)))]:null;}
+async function readShared(){
+  const rows=await dbRequest("marketplace_price_cache?select=item_name,median_rub,low_rub,high_rub,offers,source_counts,updated_at&order=updated_at.desc&limit=500");
+  return Array.isArray(rows)?rows:[];
+}
+Deno.serve(async(req:Request)=>{
+  if(req.method==="OPTIONS")return new Response("ok",{headers:cors});
+  if(req.method==="GET"){
+    try{return corsResponse({ok:true,service:"price-watch-api-adapters",sources:["FunPay API","Starvell API"],cachedResults:await readShared(),storage:"Supabase shared database"});}
+    catch(e){return corsResponse({ok:false,service:"price-watch-api-adapters",sources:["FunPay API","Starvell API"],cachedResults:[],configurationError:e instanceof Error?e.message:String(e),note:"Для общей базы нужно применить SQL migration; для поиска — добавить PARSE_API_KEY в секреты Supabase."},200);}
   }
-  const foundCount = results.filter(r => Number(r.count) > 0).length;
-  const readableSources = [...new Set(pages.filter(p => p.html).map(p => p.source))];
-  const sourceStatus = Object.fromEntries(["PlayerOK","Plati","GGSEL","Tradly","FunPay","Starvell"].map(source => {
-    const sourcePages = pages.filter(p => p.source === source);
-    const readable = sourcePages.filter(p => p.html).length;
-    const offers = results.reduce((n, r) => n + (Array.isArray(r.offers) ? r.offers.filter((o: Record<string, unknown>) => o.marketplace === source).length : 0), 0);
-    return [source, { readablePages: readable, totalPages: sourcePages.length, offersFound: offers, status: offers ? "offers_found" : readable ? "no_matching_offers" : "unavailable" }];
-  }));
-  return response({ok:foundCount > 0, status:foundCount === results.length ? "offers_found" : foundCount > 0 ? "partial_results" : "no_offers_found", updatedAt:new Date().toISOString(),itemCount:results.length,itemsWithOffers:foundCount,sourceStatus,results,note:"Сканер извлекает лоты из HTML-карточек и JSON-LD. Если площадка блокирует запросы или загружает выдачу только JavaScript-ом, результат явно отмечается как недоступный/без найденных лотов; нулевой результат не считается подтверждением отсутствия товара."});
+  if(req.method!=="POST")return corsResponse({error:"Method not allowed"},405);
+  let body:unknown;try{body=await req.json()}catch{return corsResponse({error:"Ожидается JSON"},400)}
+  const raw=asObj(body).items;
+  if(!Array.isArray(raw)||!raw.length)return corsResponse({error:"Передай items: ['название предмета']"},400);
+  if(raw.length>6)return corsResponse({error:"За запрос можно проверить максимум 6 предметов, чтобы не исчерпать бесплатную квоту API"},400);
+  const items=[...new Set(raw.map(v=>String(v??"").trim()).filter(v=>v.length>1&&v.length<=100&&!blocked(v)))];
+  if(!items.length)return corsResponse({error:"Нет корректных названий предметов"},400);
+  const results:ScanResult[]=[];
+  for(const name of items)results.push(await scanOne(name));
+  let persistence:{ok:boolean;error?:string}={ok:true};
+  try{await saveShared(results)}catch(e){persistence={ok:false,error:e instanceof Error?e.message:String(e)}}
+  const withOffers=results.filter(r=>r.count>0).length;
+  return corsResponse({ok:true,status:withOffers===results.length?"offers_found":withOffers?"partial_results":"no_offers_found",updatedAt:new Date().toISOString(),itemCount:results.length,itemsWithOffers:withOffers,persistence,sourceStatus:["FunPay","Starvell"].map(source=>({source,status:results.some(r=>r.byMarketplace[source]>0)?"offers_found":results.every(r=>r.errors.some(e=>e.startsWith(source+":")) )?"unavailable":"no_matching_offers"})),results,note:"Цены берутся только из API-ответов. Если адаптер не настроен или API не вернул совпадения, старые значения не выдаются за свежие."});
 });
