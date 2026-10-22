@@ -71,7 +71,7 @@ function loginView(mode="code",err=""){$("#app").innerHTML=`<div class="login ca
   if(r){ME=r;boot()}else{bt.disabled=false;$("#er").textContent=m||"Ошибка"}}}
 async function boot(){try{await load()}catch(e){if(/сесс/i.test(e.message))return logout()}loadSpCache();view="main";render();clearInterval(PT);clearInterval(SP_TIMER);syncStarpets(false);SP_TIMER=setInterval(()=>{if(!document.hidden&&view==="main")syncStarpets(false)},10*60*1000);PT=setInterval(async()=>{if(document.hidden||view==="admin")return;try{await load();if(SP_DATA.length)applySpData(SP_DATA);if(view==="main")rows()}catch(e){if(/сесс/i.test(e.message))logout()}},60000)}
 function render(){view==="admin"&&ME.role==="admin"?adminView():mainView()}
-function mainView(){const all=items(),gs=["Все",...[...new Set(all.map(r=>r.g)).sort((a,b)=>(b==="Редкие")-(a==="Редкие"))]];
+function mainView(){const all=items(),gs=["Все",...[...new Set(all.map(r=>r.g))].sort((a,b)=>(b==="Редкие")-(a==="Редкие"))];
  const mm2=all.filter(r=>/mm2|murder mystery/i.test(r.s+" "+r.g)).length;
  const avg=all.filter(r=>r.a!=null).length;
  $("#app").innerHTML=shell(`<div class="lay"><nav class="nav">${gs.map(g=>`<button data-g="${esc(g)}" aria-pressed="${g===grp}">${esc(g)}<small>${g==="Все"?all.length:all.filter(r=>r.g===g).length}</small></button>`).join("")}</nav>
