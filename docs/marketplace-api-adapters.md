@@ -13,7 +13,7 @@ These marketplace wrappers are third-party APIs, not official APIs from the mark
 
 ## Scope and limitations
 
-- Current structured adapters: FunPay and Starvell.
+- Current structured adapters: FunPay, Starvell and PlayerOK.
 - PlayerOK, Plati.market, GGSEL and Tradly are intentionally not shown as active adapters until a reliable, free and documented structured endpoint can be confirmed. No HTML fallback is used.
 - A source may return no matching offers or become unavailable. The scanner reports this rather than inventing a price.
 - Shared prices are updated only when at least one real, valid RUB offer is found. Existing shared prices are not overwritten by empty results.
