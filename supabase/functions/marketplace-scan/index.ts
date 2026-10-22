@@ -63,9 +63,7 @@ async function getHtml(url: string) {
 }
 function anchors(html: string, base: string, source: "FunPay" | "PlayerOK", wanted: string) {
   const out: Array<Record<string, unknown>> = [];
-  // FunPay's public category cards are normally <a class="tc-item" href="/lots/offer?id=...">.
-  // Read each card as a unit; searching a broad surrounding window can accidentally associate
-  // another seller's title or price with the wrong offer.
+  // Match product cards and read title/price from the card itself, never from neighbouring cards.
   const re = /<a\b([^>]*\bhref\s*=\s*(["'])(.*?)\2[^>]*)>([\s\S]*?)<\/a>/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) && out.length < 1500) {
@@ -73,28 +71,30 @@ function anchors(html: string, base: string, source: "FunPay" | "PlayerOK", want
     let url = "";
     try { url = new URL(rawUrl, base).href; } catch { continue; }
     if (source === "FunPay" ? !/funpay\.com\/lots\/offer\?id=\d+/i.test(url) : !/playerok\.com\/products\//i.test(url)) continue;
+
     const titleAttr = attrs.match(/\b(?:title|aria-label)\s*=\s*(["'])(.*?)\1/i)?.[2] || "";
-    const bodyText = text(body);
+    const titleNode = body.match(/<[^>]*class=["'][^"']*(?:tc-desc-text|product-card__title|product-title)[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i)?.[1] || "";
     const imgAlt = body.match(/<img\b[^>]*\balt\s*=\s*(["'])(.*?)\1/i)?.[2] || "";
-    const cardTitle = body.match(/<[^>]*class=["'][^"']*tc-desc-text[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i)?.[1] || "";
-    const title = text(titleAttr || cardTitle || bodyText || imgAlt).slice(0, 180);
-    const searchText = norm([title, imgAlt, bodyText].join(" "));
-    if (!nameMatches(searchText, wanted) || blocked(searchText)) continue;
+    const bodyText = text(body);
+    const title = text(titleAttr || titleNode || imgAlt || bodyText).slice(0, 180);
+    // Exclude accounts/bundles by the item title, not the seller/card's unrelated surrounding text.
+    if (!title || blocked(title) || !nameMatches(title, wanted)) continue;
 
     let price: number | null = null;
     if (source === "FunPay") {
-      const priceHtml = body.match(/<[^>]*class=["'][^"']*tc-price[^"']*["'][^>]*>([\s\S]*?)<\/[^>]+>/i)?.[0] || "";
-      const priceText = text(priceHtml);
-      // Do not interpret a bare data-s number as RUB unless the visible card explicitly says RUB.
-      const visibleRub = /(?:₽|руб(?:лей|ля|ль)?\.?|RUB)/i.test(priceText);
-      if (visibleRub) {
-        const dataS = priceHtml.match(/\bdata-s\s*=\s*(["'])([\d.,]+)\1/i)?.[2];
-        const numeric = dataS ? Number(dataS.replace(",", ".")) : null;
-        price = numeric !== null && Number.isFinite(numeric) && numeric > 0 ? numeric : money(priceText);
+      const priceNode = body.match(/<[^>]*class=["'][^"']*(?:tc-price|tc-amount)[^"']*["'][^>]*>[\s\S]*?<\/[^>]+>/i)?.[0] || "";
+      const priceText = text(priceNode);
+      const dataS = priceNode.match(/\bdata-s\s*=\s*(["'])([\d.,]+)\1/i)?.[2];
+      // FunPay's RUB category renders prices in rubles; prefer its numeric amount attribute.
+      if (dataS) {
+        const n = Number(dataS.replace(",", "."));
+        if (Number.isFinite(n) && n > 0 && n < 1e8) price = n;
       }
+      if (price === null) price = money(priceText);
     } else {
-      // PlayerOK can render a shell without its actual product cards. Only accept explicit RUB prices.
-      price = money(bodyText);
+      // PlayerOK results are accepted only when actual product-card HTML is present.
+      const priceNode = body.match(/<[^>]*class=["'][^"']*(?:price|amount)[^"']*["'][^>]*>[\s\S]*?<\/[^>]+>/i)?.[0] || "";
+      price = money(text(priceNode || bodyText));
     }
     if (price === null || price <= 0) continue;
 
@@ -104,11 +104,11 @@ function anchors(html: string, base: string, source: "FunPay" | "PlayerOK", want
       const parsed = new URL(imgMatch?.[2] || "", base);
       if (parsed.protocol === "https:" && !/avatar|logo|emoji|icon/i.test(parsed.href)) image = parsed.href;
     } catch { /* no usable listing image */ }
-    out.push({ name: title || wanted, price, currency: "RUB", marketplace: source, url, image, sourceUrl: base });
+    out.push({ name: title, price, currency: "RUB", marketplace: source, url, image, sourceUrl: base });
   }
   const seen = new Set<string>();
   return out.filter(x => {
-    const key = `${x.url}|${x.price}`;
+    const key = String(x.url) + "|" + String(x.price);
     if (seen.has(key)) return false;
     seen.add(key); return true;
   });
