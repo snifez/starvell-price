@@ -10,7 +10,8 @@ type Offer = { name:string; price:number; currency:"RUB"; marketplace:Source; ur
 type ScanResult = { name:string; offers:Offer[]; count:number; byMarketplace:Record<string,number>; medianRub:number|null; updatedAt:string; errors:string[] };
 const PROVIDERS = {
   FunPay: "https://api.parse.bot/scraper/b07b6749-5fbe-4b92-ac50-82aab4087ce5",
-  Starvell: "https://api.parse.bot/scraper/ab8a5cd8-8fbf-4c5f-8c27-05206d5db84b",\n  PlayerOK: "https://api.parse.bot/scraper/4688010c-bf13-44a2-bef6-4db5e643b286",
+  Starvell: "https://api.parse.bot/scraper/ab8a5cd8-8fbf-4c5f-8c27-05206d5db84b",
+  PlayerOK: "https://api.parse.bot/scraper/4688010c-bf13-44a2-bef6-4db5e643b286",
 };
 const corsResponse = (data:unknown,status=200) => new Response(JSON.stringify(data),{status,headers:{...cors,"Content-Type":"application/json; charset=utf-8","Cache-Control":"no-store"}});
 const norm=(s:string)=>s.normalize("NFKC").toLowerCase().replace(/[’']/g,"").replace(/[^a-zа-яё0-9]+/gi," ").trim().replace(/\s+/g," ");
