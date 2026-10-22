@@ -35,7 +35,7 @@ To test from a terminal, send a GET request with your project publishable key in
 
 ## Important limitations
 
-- The function now tries to read public HTML pages on StarPets-owned domains (`starpets.gg` and `starpets.me`) and extract item names/prices from embedded JSON or product-card markup. It does not call a third-party catalog API. However, the official website may build its catalog entirely in client-side JavaScript or change its HTML; in that case scraping will return an explicit error and, if available, serve the last cached catalog. This has not been live-verified from the current runtime, so check the endpoint response after deployment.
-- Prices returned by this endpoint are shown as USD and do not overwrite the app's existing RUB price estimates.
+- The function tries public HTML pages from Tradly, RAYARA, and GemX, extracting only prices explicitly marked in rubles (₽/руб.) or structured data marked RUB. It does not call hidden/private endpoints or bypass access controls. Page markup may change, so verify the endpoint after deployment; if extraction fails, it returns a clear error and serves an existing cache if available.
+- Prices are treated as RUB and remain separate from the existing manual price estimates.
 - Item matching is based on normalized names and Chroma variants, so check matches for similarly named items.
 - The SQL migration is intentionally not run automatically by GitHub Actions. Run it once in Supabase SQL Editor before testing the function.
