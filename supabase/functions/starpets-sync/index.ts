@@ -1,12 +1,11 @@
-// StarPets HTML scraper. Reads only public pages on StarPets' own domains;
-// no third-party catalog API is used. The site may change its HTML at any time.
+// Public Russian-marketplace HTML scraper. Prices are accepted only when explicitly shown in RUB (₽).
+// No private endpoints or third-party catalog API are used. Legacy function name is kept for compatibility. The site may change its HTML at any time.
 const CACHE_TABLE = "starpets_catalog_cache";
 const CACHE_TTL_MS = 10 * 60 * 1000;
 const MAX_ITEMS = 2500;
 const PAGES = [
-  "https://starpets.gg/ru/mm2",
-  "https://starpets.gg/mm2",
-  "https://starpets.me/swap",
+  "https://rayara.ru/bazaar/game/murder-mystery-2",
+  "https://gemx.store/",
 ];
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -34,7 +33,7 @@ function collectObjects(root: unknown, out: Record<string, unknown>[], depth = 0
   const o = root as Record<string, unknown>;
   const name = o.name ?? o.title ?? o.displayName ?? o.itemName;
   const price = o.price ?? o.minPrice ?? o.salePrice ?? o.cost ?? o.amount;
-  if (typeof name === "string" && name.trim().length > 1 && toPrice(price) !== null) out.push(o);
+  if (typeof name === "string" && name.trim().length > 1 && typeof price === "string" && /₽|руб/i.test(price) && toPrice(price) !== null) out.push(o);
   for (const [k,v] of Object.entries(o)) if (!/description|html|svg|translations|locales/i.test(k)) collectObjects(v, out, depth + 1);
 }
 function fromHtml(htmlRaw: string, pageUrl: string) {
@@ -59,9 +58,9 @@ function fromHtml(htmlRaw: string, pageUrl: string) {
   const cards = html.match(/<(?:article|li|div)\b[^>]*(?:product|item-card|catalog-item)[^>]*>[\s\S]{0,9000}?<\/(?:article|li|div)>/gi) ?? [];
   for (const card of cards) {
     const name = card.match(/(?:data-name|aria-label|alt)=["']([^"']{2,100})["']/i)?.[1] ?? card.match(/<h[1-6]\b[^>]*>([\s\S]{2,120}?)<\/h[1-6]>/i)?.[1]?.replace(/<[^>]+>/g, " ");
-    const priceText = card.match(/(?:data-price|data-amount)=["']([^"']+)["']/i)?.[1] ?? card.match(/(?:\$|€|₽)\s*\d+(?:[.,]\d{1,4})?|\d+(?:[.,]\d{1,4})?\s*(?:USD|EUR|RUB)/i)?.[0];
+    const priceText = card.match(/(?:data-price|data-amount)=["']([^"']*₽[^"']*)["']/i)?.[1] ?? card.match(/\d[\d\s\u00a0]*(?:[.,]\d{1,2})?\s*₽|₽\s*\d[\d\s\u00a0]*(?:[.,]\d{1,2})?/i)?.[0];
     const price = toPrice(priceText);
-    if (name && price !== null) candidates.push({ name: decode(name).trim(), price, url: pageUrl, image: card.match(/<img\b[^>]*src=["']([^"']+)["']/i)?.[1] });
+    if (name && price !== null && /₽|руб/i.test(priceText || "")) candidates.push({ name: decode(name).trim(), price, url: pageUrl, image: card.match(/<img\b[^>]*(?:src|data-src)=["']([^"']+)["']/i)?.[1] });
   }
   const merged = new Map<string, Record<string, unknown>>();
   for (const o of candidates) {
@@ -73,7 +72,7 @@ function fromHtml(htmlRaw: string, pageUrl: string) {
     const imageRaw = String(o.image ?? o.imageUrl ?? o.image_url ?? o.picture ?? o.icon ?? "");
     let image = "";
     try { if (imageRaw) image = new URL(imageRaw, pageUrl).href; } catch {}
-    const entry = { name: rawName, price, chroma: /\bchroma\b/i.test(rawName), rarity: String(o.rarity ?? o.rare ?? "").toLowerCase(), type: String(o.type ?? o.category ?? "MM2"), image: image || null, url: String(o.url ?? o.href ?? pageUrl).startsWith("http") ? String(o.url ?? o.href ?? pageUrl) : new URL(String(o.url ?? o.href), pageUrl).href };
+    const entry = { name: rawName, price, chroma: /\bchroma\b/i.test(rawName), rarity: String(o.rarity ?? o.rare ?? "").toLowerCase(), type: String(o.type ?? o.category ?? "MM2"), currency: "RUB", image: image || null, url: String(o.url ?? o.href ?? pageUrl).startsWith("http") ? String(o.url ?? o.href ?? pageUrl) : new URL(String(o.url ?? o.href), pageUrl).href };
     const old = merged.get(key); if (!old || price < Number(old.price)) merged.set(key, entry);
   }
   return [...merged.values()];
@@ -90,7 +89,7 @@ async function fetchCatalog() {
       errors.push(`${new URL(url).hostname}: HTML получен (${html.length} символов), цены не найдены — вероятно, каталог создаётся JavaScript-кодом`);
     } catch (e) { errors.push(`${new URL(url).hostname}: ${e instanceof Error ? e.message : String(e)}`); }
   }
-  throw new Error("Не удалось извлечь цены из HTML публичных страниц StarPets. " + errors.join("; "));
+  throw new Error("Не удалось извлечь рублёвые цены из HTML публичных страниц. " + errors.join("; "));
 }
 async function readCache(url: string, key: string) {
   const res = await fetch(`${url}/rest/v1/${CACHE_TABLE}?id=eq.1&select=payload,updated_at`, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
