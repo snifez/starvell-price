@@ -65,7 +65,7 @@ function toOffers(raw:unknown,source:Source,wanted:string):Offer[]{
 }
 async function scanFunPay(name:string):Promise<Offer[]>{
   // Lot 925 is the project's existing public FunPay MM2 category. The API filters by listing text.
-  const raw=await providerGet("FunPay","get_lots_by_category",{category_id:925,query:name});
+  const raw=await providerGet("FunPay","get_lots_by_category",{lot_id:925,query:name});
   return toOffers(raw,"FunPay",name);
 }
 async function scanStarvell(name:string):Promise<Offer[]>{
@@ -110,7 +110,7 @@ async function scanBatch(names:string[]):Promise<ScanResult[]>{
   const sourceErrors:Record<Source,string[]>={FunPay:[],Starvell:[],PlayerOK:[]};
   await Promise.all([
     (async()=>{try{
-      const raw=await providerGet("FunPay","get_lots_by_category",{category_id:925});
+      const raw=await providerGet("FunPay","get_lots_by_category",{lot_id:925});
       sourceOffers.FunPay=names.flatMap(name=>toOffers(raw,"FunPay",name));
     }catch(e){sourceErrors.FunPay.push(e instanceof Error?e.message:String(e));}})(),
     (async()=>{try{
