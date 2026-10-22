@@ -80,16 +80,16 @@ function toOffers(raw:unknown,source:Source,wanted:string):Offer[]{
   const out:Offer[]=[];
   for(const value of candidates){
     const o=asObj(value),seller=asObj(o.seller);
-    const title=String(o.title??o.name??o.product_name??o.brief_description??o.description??"").trim();
+    const title=String(o.title??o.name??o.product_name??o.offer_title??o.brief_description??o.description??"").trim();
     const searchable=[title,o.brief_description,o.description,o.attributes,o.subcategory,o.category].map(v=>searchableText(v)).join(" ");
     if(!title||blocked(title)||blocked(searchable)||!matches(searchable,wanted))continue;
-    const rawPrice=o.price??o.price_raw??o.priceRaw??o.raw_price??o.min_order_currency_amount;
+    const rawPrice=o.price??o.price_rub??o.price_amount??o.price_raw??o.priceRaw??o.raw_price??o.min_order_currency_amount;
     const price=numericPrice(rawPrice);
     const currency=String(o.currency??o.price_currency??asObj(rawPrice).currency??"RUB").toUpperCase();
     if(currency!=="RUB"||!Number.isFinite(price)||price<=0||price>=1e8)continue;
     // Reject Gingerscope quotes below the user-confirmed market floor.
     if(/gingerscope/i.test(wanted)&&price<26000)continue;
-    let url=String(o.offer_url??o.url??o.link??"");
+    let url=String(o.offer_url??o.public_url??o.url??o.link??"");
     if(!/^https:\/\//i.test(url)){
       const id=String(o.offer_id??o.id??o.slug??"");
       if(source==="FunPay"&&id)url="https://funpay.com/lots/offer?id="+encodeURIComponent(id);
