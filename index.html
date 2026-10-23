@@ -73,6 +73,26 @@ html{scroll-padding-top:env(safe-area-inset-top,0px);scroll-behavior:smooth}*{bo
 .chip{background:transparent}
 :root[data-theme="light"] .item-row.selected{background:#edf3ff}
 @media(max-width:560px){.bar{flex-wrap:wrap}.bar input{flex:1 1 100%}.bar select,.bar .btn{flex:1}.item-row{padding:8px 10px;gap:10px}.item-price b{font-size:14px}}
+
+/* ===== v2.1: минималистичные карточки ===== */
+.item-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;border:0;background:transparent;border-radius:0;overflow:visible}
+.item-row{display:flex;flex-direction:column;align-items:stretch;gap:0;padding:0;border:1px solid var(--b);border-radius:14px;background:var(--p);overflow:hidden;min-width:0}
+.item-row:first-child{border-top:1px solid var(--b)}
+.item-row:hover{background:var(--p);border-color:color-mix(in srgb,var(--blue) 50%,var(--b))}
+.item-row.selected{background:var(--p);border-color:var(--blue)}
+.item-art{width:100%;height:104px;border:0;border-bottom:1px solid var(--b);border-radius:0;background:var(--p2)}
+.item-art img{width:72px;height:72px;padding:0}
+.item-fallback{width:54px;height:54px;border-radius:15px;font-size:16px}
+.item-fallback svg{width:26px;height:26px}
+.item-main{padding:11px 12px 0}
+.item-title{font-size:13px;line-height:1.3;white-space:normal;min-height:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.item-sub{margin-top:3px;font-size:11px;flex-wrap:wrap;gap:4px 6px}
+.item-price{margin-top:auto;padding:10px 12px 12px;text-align:left;white-space:normal}
+.item-price b{font-size:17px;letter-spacing:-.02em}
+.item-price.none b{font-size:13px}
+.item-price span{margin-top:1px}
+:root[data-theme="light"] .item-row.selected{background:var(--p)}
+@media(max-width:560px){.item-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.item-art{height:88px}.item-price b{font-size:15px}}
 </style>
 </head>
 <body>
@@ -236,8 +256,8 @@ function priceInfo(r){const m=marketResultFor(r),live=Number(m?.medianRub),sp=sp
   if(Number.isFinite(sp)&&sp>0)return{main:fmt(sp),cap:"StarPets",cls:"live"};
   const fl=minRub(r.n);if(fl&&!(Number(r.a)>=fl))return{main:"от "+fmt(fl),cap:"нижняя граница",cls:"live"};
   const a=Number(r.a),b=Number(r.b);
-  if(a>0&&b>0&&a!==b)return{main:fmt(a)+" – "+fmt(b),cap:ra?"диапазон · медианы Starvell ещё нет":"ориентир",cls:"ref"};
-  if(a>0||b>0)return{main:fmt(a>0?a:b),cap:ra?"ориентир · медианы Starvell ещё нет":"ориентир",cls:"ref"};
+  if(a>0&&b>0&&a!==b)return{main:fmt(a)+" – "+fmt(b),cap:ra?"диапазон · нет медианы":"ориентир",cls:"ref"};
+  if(a>0||b>0)return{main:fmt(a>0?a:b),cap:ra?"ориентир · нет медианы":"ориентир",cls:"ref"};
   return{main:"нет данных",cap:"",cls:"none"}}
 function rowHTML(r){const p=priceInfo(r),sel=String(r.id)===String(selId);
   return `<button type="button" class="item-row${sel?" selected":""}" data-id="${esc(r.id)}" aria-label="Выбрать ${esc(r.n)}">${artHTML(r)}<div class="item-main"><div class="item-title">${esc(r.n)}</div><div class="item-sub">${esc([r.s||r.g,r.t].filter(Boolean).join(" · "))}${r.h?`<span class="tag hot">${esc(r.h)}</span>`:""}</div></div><div class="item-price ${p.cls}"><b>${esc(p.main)}</b>${p.cap?`<span>${esc(p.cap)}</span>`:""}</div></button>`}
