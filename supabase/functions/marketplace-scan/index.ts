@@ -367,7 +367,7 @@ Deno.serve(async(req:Request)=>{
   const raw=asObj(body).items;
   if(!Array.isArray(raw)||!raw.length)return corsResponse({error:"Передай items: ['название предмета']"},400);
   const ctxRaw=String(asObj(body).context??"mm2").toLowerCase();
-  if(raw.length>(ctxRaw==="robux"?15:6))return corsResponse({error:ctxRaw==="robux"?"За запрос Robux можно проверить максимум 15 позиций":"За запрос можно проверить максимум 6 предметов, чтобы не исчерпать бесплатную квоту API"},400);
+  if(raw.length>(ctxRaw==="robux"?60:6))return corsResponse({error:ctxRaw==="robux"?"За запрос Robux можно проверить максимум 60 позиций":"За запрос можно проверить максимум 6 предметов, чтобы не исчерпать бесплатную квоту API"},400);
   const items=[...new Set(raw.map(v=>String(v??"").trim()).filter(v=>v.length>1&&v.length<=100&&!blocked(v)))];
   if(!items.length)return corsResponse({error:"Нет корректных названий предметов"},400);
   const mm2=ctxRaw==="mm2";

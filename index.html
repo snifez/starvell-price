@@ -265,7 +265,7 @@ function robuxNames(){const m=new Map();for(const r of items()){const a=robuxAmt
 // Robux: один проход по лотам Starvell на все позиции; медиана считается на сервере (marketplace-scan, context=robux)
 async function scanRobux(){if(marketBusy)return;const names=robuxNames();if(!names.length){spStatus("В каталоге нет позиций Robux","warn");return}
   marketAbort=new AbortController();marketBusyUI(true,true);spStatus("Robux: загружаем лоты Starvell…");marketProgress(true,"Robux · Starvell",names.length+" позиций за один проход",30);
-  try{const data=await requestMarketScan(names,"robux",marketAbort.signal);const res=data.results||[];res.forEach(saveMarketResult);const ok=res.filter(x=>x.count>0&&x.medianRub!=null);
+  try{const data={results:[],sourceStatus:[]};for(let i=0;i<names.length;i+=60){const part=await requestMarketScan(names.slice(i,i+60),"robux",marketAbort.signal);data.results.push(...(part.results||[]));data.sourceStatus=part.sourceStatus||[]}const res=data.results;res.forEach(saveMarketResult);const ok=res.filter(x=>x.count>0&&x.medianRub!=null);
     $("#marketResults").innerHTML=ok.map(renderMarketResult).join("");$("#marketSrc").innerHTML=srcChips(data.sourceStatus);
     const sv=(data.sourceStatus||[]).find(x=>x.source==="Starvell");
     if(sv&&sv.status==="unavailable")spStatus("Starvell не ответил"+(sv.httpStatus?" (HTTP "+sv.httpStatus+")":"")+". Это не значит, что лотов нет — повторите позже.","err");
