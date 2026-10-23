@@ -63,3 +63,12 @@ Then test the GET health endpoint:
 `https://jmahfpaxurmsamxbtvzj.supabase.co/functions/v1/marketplace-scan`
 
 For an actual scan, send a POST request with JSON such as `{"items":["Gingerscope"]}`. A successful health check alone does not verify listing extraction.
+
+## Robux: цена по Starvell (медиана)
+
+- Запрос `marketplace-scan` с `{"items":["1000 Robux","1200 Robux"],"context":"robux"}` (до 15 позиций) делает один проход по категории Robux на Starvell. Остальные площадки для Robux пропускаются (`skipped`).
+- Для каждого количества берутся лоты Starvell именно на это количество (если их 3 и больше). Иначе лоты соседних размеров (от N/2 до 2N) пересчитываются по курсу ₽ за Robux. Выбросы отсекаются по IQR. Лоты с ценой «за 1 Robux» и продажа аккаунтов в расчёт не входят.
+- Если лотов недостаточно, медианы нет: сайт показывает старый диапазон с пометкой «медианы Starvell ещё нет». Цена не выдумывается.
+- Позиции «1 000 Robux» и «1000 Robux» в списке объединены в одну.
+- Автообновление цен раз в 2 минуты отключено: оно быстро исчерпывало бесплатную квоту Parse (200 кредитов в месяц) и давало HTTP 429. Лоты обновляются кнопкой «↻ Лоты» (Robux или MM2 — по текущему списку) или из панели «Поиск лотов». Общий кэш в Supabase доступен всем посетителям.
+- После обновления нужно заново задеплоить функцию: `supabase functions deploy marketplace-scan --no-verify-jwt` (или push — сработает workflow).
